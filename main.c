@@ -15,9 +15,7 @@ int main(void)
 	}
 
 	print_camera_info(fd);
-	ret = get_camera_fmt(fd);
-	if (ret < 0)
-		perror("get_camera_fmt");
+	get_camera_fmt(fd);
 	close(fd);
 	return 0;
 }
