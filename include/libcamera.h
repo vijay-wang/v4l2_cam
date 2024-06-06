@@ -3,6 +3,6 @@
 
 #define VIDEO_DEV	"/dev/video0"
 
-void print_cap(struct v4l2_capability *cap);
-
+void print_camera_info(int fd);
+int open_camera(char *path);
 #endif
