@@ -5,4 +5,5 @@
 
 void print_camera_info(int fd);
 int open_camera(char *path);
+int get_camera_fmt(int fd);
 #endif
