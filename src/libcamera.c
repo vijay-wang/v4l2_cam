@@ -1,13 +1,15 @@
 #include <stdio.h>
 #include <linux/videodev2.h>
-#include "libcamera.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include "libcamera.h"
 
-void print_camera_info(int fd)
+void camera_query_capability(int fd)
 {
 	struct v4l2_capability cap;
 	if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0)
@@ -23,12 +25,17 @@ void print_camera_info(int fd)
 	}
 }
 
-int open_camera(char *path)
+int camera_open(char *path)
 {
 	return open(path, O_RDWR);
 }
 
-int get_camera_fmt(int fd)
+int camera_close(int fd)
+{
+	return close(fd);
+}
+
+int camera_list_fmt(int fd)
 {
 	int ret;
 	struct v4l2_fmtdesc desc;
@@ -45,7 +52,7 @@ int get_camera_fmt(int fd)
 			return ret;
 		else {
 			char *d = (char *)&desc.pixelformat;
-			printf(INDENT"description %d:\n", desc.index);
+			printf(INDENT"fomate [%d]:\n", desc.index);
 			printf(INDENT"index: %d\n", desc.index);
 			printf(INDENT"type: %d\n", desc.type);
 			printf(INDENT"flag: %d\n", desc.flags);
@@ -93,30 +100,53 @@ int get_camera_fmt(int fd)
 	return 0;
 }
 
-int get_camera_ext_ctrl(int fd)
+int camera_set_format(int fd, struct v4l2_format *fmt)
 {
-//	int ret;
-//	//struct v4l2_fmtdesc desc;
-//	struct v4l2_query_ext_ctrl ext_ctrl;
-//	memset(&ext_ctrl, 0, sizeof(struct v4l2_query_ext_ctrl));
-//	printf("\next ctrl:\n");
-//	for (;;) {
-//		/* index 必须初始化,这里从0开始循环 */
-//		//desc.index = 0;
-//		desc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-//		ret = ioctl(fd, VIDIOC_ENUM_FMT, &desc);
-//		if (ret < 0)
-//			return ret;
-//		else {
-//			char *d = (char *)&desc.pixelformat;
-//			printf(INDENT"description %d:\n", desc.index);
-//			printf(INDENT INDENT"index: %d\n", desc.index);
-//			printf(INDENT INDENT"type: %d\n", desc.type);
-//			printf(INDENT INDENT"flag: %d\n", desc.flags);
-//			printf(INDENT INDENT"description: %s\n", desc.description);
-//			printf(INDENT INDENT"pixelformat: %c%c%c%c\n", d[0], d[1], d[2], d[3]);
-//		}
-//		desc.index++;
-//	}
+	return ioctl(fd, VIDIOC_S_FMT, fmt);
+}
+
+int camera_request_buffers(int fd, struct v4l2_requestbuffers *buffers)
+{
+	return ioctl(fd, VIDIOC_REQBUFS, buffers);
+}
+
+int camera_query_buffer(int fd, struct v4l2_buffer *mbuffer)
+{
+	return ioctl(fd, VIDIOC_QUERYBUF, mbuffer);
+}
+
+int camera_map_buffer(int fd, struct v4l2_buffer *mbuffer, struct mbuf *buf)
+{
+	buf->length = mbuffer->length;
+	buf->pbuf = mmap(NULL, mbuffer->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, mbuffer->m.offset );
+	if (buf->pbuf < 0)
+		return -1;
 	return 0;
+}
+
+int camera_munmap_buffer(struct mbuf *buf)
+{
+	return munmap(buf->pbuf, buf->length);
+}
+
+/* 将空闲的内存加入可捕获视频的队列 */
+int camera_qbuffer(int fd, struct v4l2_buffer *mbuffer)
+{
+	return ioctl(fd, VIDIOC_QBUF, mbuffer);
+}
+
+/* 将已经捕获好视频的内存拉出已捕获视频的队列 */
+int camera_dqbuffer(int fd, struct v4l2_buffer *mbuffer)
+{
+	return ioctl(fd, VIDIOC_DQBUF, mbuffer);
+}
+
+int camera_streamon(int fd, enum v4l2_buf_type *type)
+{
+	return ioctl(fd, VIDIOC_STREAMON, type);
+}
+
+int camera_streamoff(int fd, enum v4l2_buf_type *type)
+{
+	return ioctl(fd, VIDIOC_STREAMOFF, type);
 }
