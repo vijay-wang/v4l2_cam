@@ -3,12 +3,13 @@ INCLUDE=-I./include
 CC=gcc
 SRC=$(wildcard *.c) $(wildcard ./src/*.c)
 OBJ=$(patsubst %.c,%.o,$(SRC))
+LIBFLAGS=-ljpeg
 
 ${target}: ${OBJ}
-	${CC} $^ ${INCLUDE} -o $@
+	${CC} $^ ${INCLUDE} -o $@ $(LIBFLAGS) 
 
 %.o: %.c
-	${CC} -c ${INCLUDE} $^ -o $@
+	${CC} -c ${INCLUDE} $^ -o $@ $(LIBFLAGS)
 
 clean:
 	rm ${target} ${OBJ}

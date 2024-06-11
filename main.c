@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "libcamera.h"
+#include "algorithm.h"
 
 #define BUFFER_COUNT	4
 
@@ -22,7 +23,8 @@ int main(void)
 	if (fd < 0) {
 		perror("camera_open");
 		return fd;
-	}
+	} else
+		printf("camera_open success\n");
 
 	camera_query_capability(fd);
 	camera_list_fmt(fd);
@@ -36,6 +38,8 @@ int main(void)
 	ret = camera_set_format(fd, &fmt);
 	if (ret < 0)
 		perror("camera_set_format");
+	 else
+		printf("camera_set_format success\n");
 
 	/* request buffers */
 	reqbuffer.count = BUFFER_COUNT;
@@ -44,6 +48,8 @@ int main(void)
 	ret = camera_request_buffers(fd, &reqbuffer);
 	if (ret < 0)
 		perror("camera_request_buffers");
+	 else
+		printf("camera_request_buffers success\n");
 
 	/* query buffers, map buffers, enqueue buffers */
 	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
@@ -66,12 +72,16 @@ int main(void)
 	ret = camera_streamon(fd, &type);
 	if (ret < 0)
 		perror("camera_streamon");
+	 else
+		printf("camera_streamon success\n");
 
 	/* dequeu buffer */
 	mbuffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	ret = camera_dqbuffer(fd, &mbuffer);
 	if (ret < 0)
 		perror("camera_dqbuffer");
+	 else
+		printf("camera_dqbuffer success\n");
 
 	/* save image */
 	int img_file = open("./image", O_RDWR | O_CREAT, 0666);
@@ -84,15 +94,24 @@ int main(void)
 		close(img_file);
 	}
 
+	unsigned char *mjpegFrame = bufs[mbuffer.index].pbuf;
+	size_t frameSize = mbuffer.length;
+	RGBImage *image = decodeJPEG(mjpegFrame, frameSize);
+	freeRGBImage(image);
+
 	/* enqueue buffer */
 	ret = camera_qbuffer(fd, &mbuffer);
 	if (ret < 0)
 		perror("camera_qbuffer");
+	 else
+		printf("camera_qbuffer success\n");
 		
 	/* stream off */
 	ret = camera_streamoff(fd, &type);
 	if (ret < 0)
 		perror("camera_streamoff");
+	 else
+		printf("camera_streamoff success\n");
 
 	/* unmap buffers */
 	for (int i = 0; i < BUFFER_COUNT; ++i) {
