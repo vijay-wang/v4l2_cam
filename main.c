@@ -33,8 +33,8 @@ int main(void)
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.width = 1280;
 	fmt.fmt.pix.height = 720;
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
-	//fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+	//fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
 	ret = camera_set_format(fd, &fmt);
 	if (ret < 0)
 		perror("camera_set_format");
@@ -94,10 +94,10 @@ int main(void)
 		close(img_file);
 	}
 
-	unsigned char *mjpegFrame = bufs[mbuffer.index].pbuf;
-	size_t frameSize = mbuffer.length;
-	RGBImage *image = decodeJPEG(mjpegFrame, frameSize);
-	freeRGBImage(image);
+	unsigned char *mjpeg_frame = bufs[mbuffer.index].pbuf;
+	size_t frame_size = mbuffer.length;
+	rgb_image *image = decode_jpeg(mjpeg_frame, frame_size);
+	free_rgb_image(image);
 
 	/* enqueue buffer */
 	ret = camera_qbuffer(fd, &mbuffer);

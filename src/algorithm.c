@@ -3,17 +3,17 @@
 #include <jpeglib.h>
 #include "algorithm.h"
 
-RGBImage* decodeJPEG(const unsigned char *jpegData, size_t jpegSize) {
+rgb_image* decode_jpeg(const unsigned char *jpeg_data, size_t jpeg_size) {
 	struct jpeg_decompress_struct cinfo;
 	struct jpeg_error_mgr jerr;
 	cinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_decompress(&cinfo);
 
-	jpeg_mem_src(&cinfo, jpegData, jpegSize);
+	jpeg_mem_src(&cinfo, jpeg_data, jpeg_size);
 
 	int rc = jpeg_read_header(&cinfo, TRUE);
 	if (rc != 1) {
-		fprintf(stderr, "File does not seem to be a normal JPEG\n");
+		fprintf(stderr, "file does not seem to be a normal jpeg\n");
 		return NULL;
 	}
 
@@ -35,7 +35,7 @@ RGBImage* decodeJPEG(const unsigned char *jpegData, size_t jpegSize) {
 	jpeg_finish_decompress(&cinfo);
 	jpeg_destroy_decompress(&cinfo);
 
-	RGBImage *image = (RGBImage *)malloc(sizeof(RGBImage));
+	rgb_image *image = (rgb_image *)malloc(sizeof(rgb_image));
 	image->data = bmp_buffer;
 	image->width = width;
 	image->height = height;
@@ -43,7 +43,7 @@ RGBImage* decodeJPEG(const unsigned char *jpegData, size_t jpegSize) {
 	return image;
 }
 
-void freeRGBImage(RGBImage *image) {
+void free_rgb_image(rgb_image *image) {
 	if (image) {
 		free(image->data);
 		free(image);

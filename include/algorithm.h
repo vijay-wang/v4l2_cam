@@ -4,8 +4,8 @@ typedef struct {
 	unsigned char *data;
 	int width;
 	int height;
-} RGBImage;
+} rgb_image;
 
-RGBImage* decodeJPEG(const unsigned char *jpegData, size_t jpegSize);
-void freeRGBImage(RGBImage *image);
+rgb_image* decode_jpeg(const unsigned char *jpeg_data, size_t jpeg_size);
+void free_rgb_image(rgb_image *image);
 #endif
