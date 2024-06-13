@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <SDL2/SDL.h>
 #include <linux/videodev2.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -60,7 +61,7 @@ int main(void)
 	ret = camera_set_format(fd, &fmt);
 	if (ret < 0)
 		perror("camera_set_format");
-	 else
+	else
 		printf("camera_set_format success\n");
 
 	/* request buffers */
@@ -70,7 +71,7 @@ int main(void)
 	ret = camera_request_buffers(fd, &reqbuffer);
 	if (ret < 0)
 		perror("camera_request_buffers");
-	 else
+	else
 		printf("camera_request_buffers success\n");
 
 	/* query buffers, map buffers, enqueue buffers */
@@ -94,7 +95,7 @@ int main(void)
 	ret = camera_streamon(fd, &type);
 	if (ret < 0)
 		perror("camera_streamon");
-	 else
+	else
 		printf("camera_streamon success\n");
 
 	///* dequeu buffer */
@@ -105,7 +106,7 @@ int main(void)
 	// else
 	//	printf("camera_dqbuffer success\n");
 	//
-	
+
 	// Open the framebuffer device
 	int fb_fd = fb_open(FB_PATH);
 	if (fb_fd == -1) {
@@ -113,22 +114,33 @@ int main(void)
 		return -1;
 	}
 
-	// Get variable screen information
-	if (fb_get_vscreen_info(fb_fd, &vinfo)) {
-		perror("Reading variable information");
-		return -1;
+	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+		fprintf(stderr, "Could not initialize SDL - %s\n", SDL_GetError());
+		return 1;
 	}
 
-	// Get fixed screen information
-	if (fb_get_fscreen_info(fb_fd, &finfo)) {
-		perror("Reading fixed information");
-		return -1;
+	SDL_Window *window = SDL_CreateWindow("Video Display", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, 0);
+	if (!window) {
+		fprintf(stderr, "Could not create window - %s\n", SDL_GetError());
+		SDL_Quit();
+		return 1;
 	}
 
-	fb_ptr = fb_map_framebuffer(fb_fd, &vinfo, &finfo);
-	if (fb_ptr == MAP_FAILED) {
-		perror("Error mapping framebuffer device to memory");
-		return -1;
+	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, 0);
+	if (!renderer) {
+		fprintf(stderr, "Could not create renderer - %s\n", SDL_GetError());
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
+	}
+
+	SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+	if (!texture) {
+		fprintf(stderr, "Could not create texture - %s\n", SDL_GetError());
+		SDL_DestroyRenderer(renderer);
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
 	}
 
 	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
@@ -161,13 +173,37 @@ int main(void)
 			}
 		}
 
-		fb_display_rgb_frame(WIDTH, HEIGHT, &vinfo, rgb_frame, fb_ptr);
+		// Update the texture with the new frame
+		SDL_UpdateTexture(texture, NULL, rgb_frame, WIDTH * 3);
+
+		// Clear the renderer
+		SDL_RenderClear(renderer);
+
+		// Copy the texture to the renderer
+		//SDL_RenderCopy(renderer, texture, NULL, NULL);
+		if (SDL_RenderCopy(renderer, texture, NULL, NULL) != 0) {
+			fprintf(stderr, "SDL_RenderCopy error: %s\n", SDL_GetError());
+			SDL_DestroyTexture(texture);
+			SDL_DestroyRenderer(renderer);
+			SDL_DestroyWindow(window);
+			SDL_Quit();
+			break;
+		}
+
+		// Present the rendered image to the window
+		SDL_RenderPresent(renderer);
+
+		//fb_display_rgb_frame(WIDTH, HEIGHT, &vinfo, rgb_frame, fb_ptr);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			perror("Queue Buffer");
 			return -1;
 		}
 	}
+	SDL_DestroyTexture(texture);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
 	camera_free_rgb(rgb_frame);
 #if 0
 	/* save image */
