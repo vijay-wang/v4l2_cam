@@ -50,7 +50,7 @@ void free_rgb_image(rgb_image *image) {
 	}
 }
 
-void yuyv_to_rgb(unsigned char *yuyv, unsigned char *rgb, int width, int height)
+void yuyv2rgb(unsigned char *yuyv, unsigned char *rgb, int width, int height)
 {
 	int frame_size = width * height * 2;
 	int rgb_index = 0;

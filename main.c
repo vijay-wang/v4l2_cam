@@ -139,7 +139,7 @@ int main(void)
 			//return 1;
 		}
 
-		yuyv_to_rgb(bufs[mbuffer.index].pbuf, rgb_frame, WIDTH, HEIGHT);
+		yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, WIDTH, HEIGHT);
 		fb_display_rgb_frame(WIDTH, HEIGHT, &vinfo, rgb_frame, fb_ptr);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
