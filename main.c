@@ -20,7 +20,6 @@
 int main(void)
 {
 	int fd, ret;
-	long screensize;
 	unsigned char *fb_ptr;
 	unsigned char *rgb_frame;
 	struct mbuf bufs[BUFFER_COUNT];
@@ -114,9 +113,7 @@ int main(void)
 		return -1;
 	}
 
-	// Map framebuffer to user memory
-	screensize = vinfo.yres_virtual * finfo.line_length;
-	fb_ptr = (unsigned char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
+	fb_ptr = fb_map_framebuffer(fb_fd, &vinfo, &finfo);
 	if (fb_ptr == MAP_FAILED) {
 		perror("Error mapping framebuffer device to memory");
 		return -1;
@@ -143,27 +140,7 @@ int main(void)
 		}
 
 		yuyv_to_rgb(bufs[mbuffer.index].pbuf, rgb_frame, WIDTH, HEIGHT);
-
-		for (int y = 0; y < HEIGHT; y++) {
-			for (int x = 0; x < WIDTH; x++) {
-				int fb_index = (y * vinfo.xres + x) * (vinfo.bits_per_pixel / 8);
-				int rgb_index = (y * WIDTH + x) * 3;
-
-				if (vinfo.bits_per_pixel == 32) {
-					fb_ptr[fb_index + 0] = rgb_frame[rgb_index + 2]; // Blue
-					fb_ptr[fb_index + 1] = rgb_frame[rgb_index + 1]; // Green
-					fb_ptr[fb_index + 2] = rgb_frame[rgb_index + 0]; // Red
-					fb_ptr[fb_index + 3] = 0;                        // No transparency
-				} else {
-					// Assuming 16bpp
-					int b = rgb_frame[rgb_index + 2] >> 3;
-					int g = rgb_frame[rgb_index + 1] >> 2;
-					int r = rgb_frame[rgb_index + 0] >> 3;
-					unsigned short int t = r << 11 | g << 5 | b;
-					*((unsigned short int*)(fb_ptr + fb_index)) = t;
-				}
-			}
-		}
+		fb_display_rgb_frame(WIDTH, HEIGHT, &vinfo, rgb_frame, fb_ptr);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			perror("Queue Buffer");
