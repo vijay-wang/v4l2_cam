@@ -6,18 +6,29 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include "libcamera.h"
 #include "algorithm.h"
+#include "fb_screen.h"
 
 #define BUFFER_COUNT	4
+#define WIDTH	640
+#define HEIGHT	480
+
+#define FB_PATH	"/dev/fb0"
 
 int main(void)
 {
 	int fd, ret;
+	long screensize;
+	unsigned char *fb_ptr;
+	unsigned char *rgb_frame;
 	struct mbuf bufs[BUFFER_COUNT];
 	struct v4l2_format fmt;
 	struct v4l2_requestbuffers reqbuffer;
 	struct v4l2_buffer mbuffer;
+	struct fb_var_screeninfo vinfo;
+	struct fb_fix_screeninfo finfo;
 
 	fd = camera_open(VIDEO_DEV);
 	if (fd < 0) {
@@ -31,8 +42,8 @@ int main(void)
 
 	/* set format */
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	fmt.fmt.pix.width = 1280;
-	fmt.fmt.pix.height = 720;
+	fmt.fmt.pix.width = WIDTH;
+	fmt.fmt.pix.height = HEIGHT;
 	//fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
 	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
 	ret = camera_set_format(fd, &fmt);
@@ -75,14 +86,92 @@ int main(void)
 	 else
 		printf("camera_streamon success\n");
 
-	/* dequeu buffer */
-	mbuffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	ret = camera_dqbuffer(fd, &mbuffer);
-	if (ret < 0)
-		perror("camera_dqbuffer");
-	 else
-		printf("camera_dqbuffer success\n");
+	///* dequeu buffer */
+	//mbuffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	//ret = camera_dqbuffer(fd, &mbuffer);
+	//if (ret < 0)
+	//	perror("camera_dqbuffer");
+	// else
+	//	printf("camera_dqbuffer success\n");
+	//
+	
+	// Open the framebuffer device
+	int fb_fd = fb_open(FB_PATH);
+	if (fb_fd == -1) {
+		perror("Opening framebuffer device");
+		return -1;
+	}
 
+	// Get variable screen information
+	if (fb_get_vscreen_info(fb_fd, &vinfo)) {
+		perror("Reading variable information");
+		return -1;
+	}
+
+	// Get fixed screen information
+	if (fb_get_fscreen_info(fb_fd, &finfo)) {
+		perror("Reading fixed information");
+		return -1;
+	}
+
+	// Map framebuffer to user memory
+	screensize = vinfo.yres_virtual * finfo.line_length;
+	fb_ptr = (unsigned char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
+	if (fb_ptr == MAP_FAILED) {
+		perror("Error mapping framebuffer device to memory");
+		return -1;
+	}
+
+	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
+
+	while (1) {
+		fd_set fds;
+		FD_ZERO(&fds);
+		FD_SET(fd, &fds);
+		struct timeval tv = {0};
+		tv.tv_sec = 5;
+		int r = select(fd + 1, &fds, NULL, NULL, &tv);
+		if (-1 == r) {
+			perror("Waiting for Frame");
+			return 1;
+		}
+
+		if (camera_dqbuffer(fd, &mbuffer) == -1) {
+			perror("Retrieving Frame");
+			continue;
+			//return 1;
+		}
+
+		yuyv_to_rgb(bufs[mbuffer.index].pbuf, rgb_frame, WIDTH, HEIGHT);
+
+		for (int y = 0; y < HEIGHT; y++) {
+			for (int x = 0; x < WIDTH; x++) {
+				int fb_index = (y * vinfo.xres + x) * (vinfo.bits_per_pixel / 8);
+				int rgb_index = (y * WIDTH + x) * 3;
+
+				if (vinfo.bits_per_pixel == 32) {
+					fb_ptr[fb_index + 0] = rgb_frame[rgb_index + 2]; // Blue
+					fb_ptr[fb_index + 1] = rgb_frame[rgb_index + 1]; // Green
+					fb_ptr[fb_index + 2] = rgb_frame[rgb_index + 0]; // Red
+					fb_ptr[fb_index + 3] = 0;                        // No transparency
+				} else {
+					// Assuming 16bpp
+					int b = rgb_frame[rgb_index + 2] >> 3;
+					int g = rgb_frame[rgb_index + 1] >> 2;
+					int r = rgb_frame[rgb_index + 0] >> 3;
+					unsigned short int t = r << 11 | g << 5 | b;
+					*((unsigned short int*)(fb_ptr + fb_index)) = t;
+				}
+			}
+		}
+
+		if (camera_qbuffer(fd, &mbuffer) == -1) {
+			perror("Queue Buffer");
+			return -1;
+		}
+	}
+	camera_free_rgb(rgb_frame);
+#if 0
 	/* save image */
 	int img_file = open("./image", O_RDWR | O_CREAT, 0666);
 	if (img_file < 0)
@@ -98,13 +187,7 @@ int main(void)
 	size_t frame_size = mbuffer.length;
 	rgb_image *image = decode_jpeg(mjpeg_frame, frame_size);
 	free_rgb_image(image);
-
-	/* enqueue buffer */
-	ret = camera_qbuffer(fd, &mbuffer);
-	if (ret < 0)
-		perror("camera_qbuffer");
-	 else
-		printf("camera_qbuffer success\n");
+#endif
 		
 	/* stream off */
 	ret = camera_streamoff(fd, &type);

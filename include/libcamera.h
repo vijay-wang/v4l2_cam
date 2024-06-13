@@ -23,4 +23,6 @@ int camera_qbuffer(int fd, struct v4l2_buffer *mbuffer);
 int camera_dqbuffer(int fd, struct v4l2_buffer *mbuffer);
 int camera_streamon(int fd, enum v4l2_buf_type *type);
 int camera_streamoff(int fd, enum v4l2_buf_type *type);
+unsigned char *camera_alloc_rgb(const unsigned int width, const unsigned int height);
+void camera_free_rgb(unsigned char *rgb);
 #endif

@@ -150,3 +150,13 @@ int camera_streamoff(int fd, enum v4l2_buf_type *type)
 {
 	return ioctl(fd, VIDIOC_STREAMOFF, type);
 }
+
+unsigned char *camera_alloc_rgb(const unsigned int width, const unsigned int height)
+{
+	return (unsigned char *)malloc(width * height * 3);
+}
+
+void camera_free_rgb(unsigned char *rgb)
+{
+	free(rgb);
+}
