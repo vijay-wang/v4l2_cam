@@ -12,8 +12,10 @@
 #include "fb_screen.h"
 
 #define BUFFER_COUNT	4
-#define WIDTH	640
-#define HEIGHT	480
+//#define WIDTH		640
+//#define HEIGHT	480
+#define WIDTH		1280
+#define HEIGHT		720
 
 #define FB_PATH	"/dev/fb0"
 
@@ -22,8 +24,8 @@ enum {
 	MODE_MJPEG,
 };
 
-//#define MODE	MODE_MJPEG
-#define MODE	MODE_YUYV
+#define MODE	MODE_MJPEG
+//#define MODE	MODE_YUYV
 
 int main(void)
 {

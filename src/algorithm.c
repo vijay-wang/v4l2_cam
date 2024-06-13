@@ -3,8 +3,7 @@
 #include <jpeglib.h>
 #include "algorithm.h"
 
-int mjpeg2rgb(unsigned char* mjpeg_data, long size, unsigned char* rgb_data, int width, int height)
-{
+int mjpeg2rgb(unsigned char* mjpeg_data, long size, unsigned char* rgb_data, int width, int height) {
 	struct jpeg_decompress_struct cinfo;
 	struct jpeg_error_mgr jerr;
 
@@ -15,20 +14,18 @@ int mjpeg2rgb(unsigned char* mjpeg_data, long size, unsigned char* rgb_data, int
 	jpeg_read_header(&cinfo, TRUE);
 	jpeg_start_decompress(&cinfo);
 
-	width = cinfo.output_width;
-	height = cinfo.output_height;
-	int pixel_size = cinfo.output_components;
+	// 取消了宽高检查
+	// if (cinfo.output_width != width || cinfo.output_height != height || cinfo.output_components != 3) {
+	//    fprintf(stderr, "Unexpected image size or format\n");
+	//    jpeg_finish_decompress(&cinfo);
+	//    jpeg_destroy_decompress(&cinfo);
+	//    return -1;
+	//}
 
-	if (pixel_size != 3) {
-		fprintf(stderr, "Unsupported pixel size: %d\n", pixel_size);
-		jpeg_finish_decompress(&cinfo);
-		jpeg_destroy_decompress(&cinfo);
-		return -1;
-	}
-
+	int row_stride = width * cinfo.output_components; // 修正了行对齐问题
 	while (cinfo.output_scanline < cinfo.output_height) {
 		unsigned char *buffer_array[1];
-		buffer_array[0] = rgb_data + (cinfo.output_scanline) * cinfo.output_width * 3;
+		buffer_array[0] = rgb_data + (cinfo.output_scanline) * row_stride;
 		jpeg_read_scanlines(&cinfo, buffer_array, 1);
 	}
 
@@ -36,13 +33,6 @@ int mjpeg2rgb(unsigned char* mjpeg_data, long size, unsigned char* rgb_data, int
 	jpeg_destroy_decompress(&cinfo);
 
 	return 0;
-}
-
-void free_rgb_image(rgb_image *image) {
-	if (image) {
-		free(image->data);
-		free(image);
-	}
 }
 
 void yuyv2rgb(unsigned char *yuyv, unsigned char *rgb, int width, int height)
