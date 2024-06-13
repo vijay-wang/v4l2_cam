@@ -17,6 +17,14 @@
 
 #define FB_PATH	"/dev/fb0"
 
+enum {
+	MODE_YUYV,
+	MODE_MJPEG,
+};
+
+//#define MODE	MODE_MJPEG
+#define MODE	MODE_YUYV
+
 int main(void)
 {
 	int fd, ret;
@@ -43,8 +51,10 @@ int main(void)
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.width = WIDTH;
 	fmt.fmt.pix.height = HEIGHT;
-	//fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+	if (MODE == MODE_YUYV)
+		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+	if (MODE == MODE_MJPEG)
+		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
 	ret = camera_set_format(fd, &fmt);
 	if (ret < 0)
 		perror("camera_set_format");
@@ -139,7 +149,16 @@ int main(void)
 			//return 1;
 		}
 
-		yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, WIDTH, HEIGHT);
+		if (MODE == MODE_YUYV)
+			yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, WIDTH, HEIGHT);
+		if (MODE == MODE_MJPEG) {
+			int result = mjpeg2rgb(bufs[mbuffer.index].pbuf, mbuffer.length, rgb_frame, WIDTH, HEIGHT);
+			if (result != 0) {
+				printf("mjpeg decode failed\n");
+				break;
+			}
+		}
+
 		fb_display_rgb_frame(WIDTH, HEIGHT, &vinfo, rgb_frame, fb_ptr);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {

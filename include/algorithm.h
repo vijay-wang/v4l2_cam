@@ -6,8 +6,6 @@ typedef struct {
 	int height;
 } rgb_image;
 
-rgb_image* mjpeg2rgb(const unsigned char *jpeg_data, size_t jpeg_size);
-void free_rgb_image(rgb_image *image);
-
+int mjpeg2rgb(unsigned char* mjpeg_data, long size, unsigned char* rgb_data, int width, int height);
 void yuyv2rgb(unsigned char *yuyv, unsigned char *rgb, int width, int height);
 #endif
