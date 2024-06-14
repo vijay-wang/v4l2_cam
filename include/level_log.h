@@ -1,5 +1,5 @@
-#ifndef _V4L2_CAM_LOG_H
-#define _V4L2_CAM_LOG_H
+#ifndef _LEVEL_LOG_H
+#define _LEVEL_LOG_H
 #include <stdio.h>
 
 // 定义日志级别

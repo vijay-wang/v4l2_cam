@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include "video.h"
-#include "v4l2_cam_log.h"
+#include "level_log.h"
 #include "algorithm.h"
 #include "fb_screen.h"
 #include "sdl_display.h"
