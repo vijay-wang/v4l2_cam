@@ -10,6 +10,7 @@
 #include "libcamera.h"
 #include "algorithm.h"
 #include "fb_screen.h"
+#include "sdl_display.h"
 
 #define BUFFER_COUNT	4
 //#define WIDTH		640
@@ -19,19 +20,55 @@
 #define WIDTH		320
 #define HEIGHT		180
 
-
-
 #define FB_PATH	"/dev/fb0"
 
-enum {
-	MODE_YUYV,
-	MODE_MJPEG,
+struct opt_args {
+	char *pixel_format;
+	char *display_mode;
 };
 
-#define MODE	MODE_MJPEG
-//#define MODE	MODE_YUYV
+void usage(void)
+{
+	printf(	"v4l2_cam usage:\n"
+		"	-d display mode, sdl or fb\n"
+		"	-f pixel format, yuyv or mjpeg\n"
+		"	-h help\n");
+}
 
-int main(void)
+void parse_args(struct opt_args *args, int argc, char **argv)
+{
+	char ch;
+
+	if (argc < 2) {
+		usage();
+		exit(EXIT_FAILURE);
+	}
+
+	while ((ch = getopt(argc, argv, "d:f:h")) != -1)  {
+		switch (ch) {
+		case 'd':
+			args->display_mode = optarg;
+			break;
+		case 'f':
+			args->pixel_format = optarg;
+			break;
+		case 'h':
+			usage();
+			exit(EXIT_SUCCESS);
+		default:
+			usage();
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	for (int i = optind; i < argc; i++) {
+		fprintf(stderr, "Error: Invalid argument '%s'\n", argv[i]);
+		usage();
+		exit(EXIT_FAILURE);
+	}
+}
+
+int main(int argc, char *argv[])
 {
 	int fd, ret;
 	unsigned char *rgb_frame;
@@ -40,6 +77,10 @@ int main(void)
 	struct v4l2_requestbuffers reqbuffer;
 	struct v4l2_buffer mbuffer;
 	struct fb_info fb_info;
+	struct sdl_info sdl_info;
+	struct opt_args args;
+
+	parse_args(&args, argc, argv);
 
 	fd = camera_open(VIDEO_DEV);
 	if (fd < 0) {
@@ -55,10 +96,14 @@ int main(void)
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.width = WIDTH;
 	fmt.fmt.pix.height = HEIGHT;
-	if (MODE == MODE_YUYV)
+	if (!strcmp(args.pixel_format, "yuyv"))
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-	if (MODE == MODE_MJPEG)
+	else if (!strcmp(args.pixel_format, "mjpeg"))
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+	else {
+		fprintf(stderr, "Unkown pixel format\n");
+		exit(EXIT_FAILURE);
+	}
 	ret = camera_set_format(fd, &fmt);
 	if (ret < 0)
 		perror("camera_set_format");
@@ -100,10 +145,21 @@ int main(void)
 		printf("camera_streamon success\n");
 
 	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
-	fb_set_info(&fb_info, WIDTH, HEIGHT, FB_PATH);
-	ret = fb_init(&fb_info);
-	if (ret < 0)
-		perror("fb_init failed\n");
+
+	if (!strcmp(args.display_mode, "fb")) {
+		fb_set_info(&fb_info, WIDTH, HEIGHT, FB_PATH);
+		ret = fb_init(&fb_info);
+		if (ret < 0)
+			perror("fb_init failed\n");
+	} else if (!strcmp(args.display_mode, "sdl")) {
+		ret = sdl_init(&sdl_info, WIDTH, HEIGHT);
+		if (ret < 0)
+			perror("sdl_init");
+	} else {
+		fprintf(stderr, "Unkown display_mode\n");
+		exit(EXIT_FAILURE);
+	}
+
 
 	while (1) {
 		fd_set fds;
@@ -114,7 +170,7 @@ int main(void)
 		int r = select(fd + 1, &fds, NULL, NULL, &tv);
 		if (-1 == r) {
 			perror("Waiting for Frame");
-			return 1;
+			break;
 		}
 
 		if (camera_dqbuffer(fd, &mbuffer) == -1) {
@@ -123,9 +179,9 @@ int main(void)
 			//return 1;
 		}
 
-		if (MODE == MODE_YUYV)
+		if (!strcmp(args.pixel_format, "yuyv"))
 			yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, WIDTH, HEIGHT);
-		if (MODE == MODE_MJPEG) {
+		else if (!strcmp(args.pixel_format, "mjpeg")) {
 			int result = mjpeg2rgb(bufs[mbuffer.index].pbuf, mbuffer.length, rgb_frame, WIDTH, HEIGHT);
 			if (result != 0) {
 				printf("mjpeg decode failed\n");
@@ -133,16 +189,24 @@ int main(void)
 			}
 		}
 
-		fb_display_rgb_frame(&fb_info, rgb_frame);
+		if (!strcmp(args.display_mode, "fb"))
+			fb_display_rgb_frame(&fb_info, rgb_frame);
+		else if (!strcmp(args.display_mode, "sdl"))
+			sdl_dislpay(&sdl_info, rgb_frame);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			perror("Queue Buffer");
-			return -1;
+			break;
 		}
 	}
-	ret = fb_deinit(&fb_info);
-	if (ret < 0)
-		perror("fb_deinit failed");
+
+	if (!strcmp(args.display_mode, "fb")) {
+		ret = fb_deinit(&fb_info);
+		if (ret < 0)
+			perror("fb_deinit failed");
+	} else if (!strcmp(args.display_mode, "sdl"))
+		sdl_deinit(&sdl_info);
+		
 	camera_free_rgb(rgb_frame);
 		
 	/* stream off */
