@@ -57,6 +57,7 @@ void parse_args(struct opt_args *args, int argc, char **argv)
 			exit(EXIT_SUCCESS);
 		default:
 			usage();
+			printf("default\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -80,6 +81,14 @@ int main(int argc, char *argv[])
 	struct sdl_info sdl_info;
 	struct opt_args args;
 
+	memset(bufs, 0, sizeof(bufs));
+	memset(&fmt, 0, sizeof(struct v4l2_format));
+	memset(&reqbuffer, 0, sizeof(struct v4l2_requestbuffers));
+	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
+	memset(&fb_info, 0, sizeof(struct fb_info));
+	memset(&sdl_info, 0, sizeof(struct opt_args));
+	memset(&args, 0, sizeof(struct opt_args));
+
 	parse_args(&args, argc, argv);
 
 	fd = camera_open(VIDEO_DEV);
@@ -96,7 +105,10 @@ int main(int argc, char *argv[])
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.width = WIDTH;
 	fmt.fmt.pix.height = HEIGHT;
-	if (!strcmp(args.pixel_format, "yuyv"))
+	if (!args.pixel_format) {
+		fprintf(stderr, "Pixel format not been set\n");
+		exit(EXIT_FAILURE);
+	} else if (!strcmp(args.pixel_format, "yuyv"))
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
 	else if (!strcmp(args.pixel_format, "mjpeg"))
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
@@ -146,7 +158,10 @@ int main(int argc, char *argv[])
 
 	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
 
-	if (!strcmp(args.display_mode, "fb")) {
+	if (!args.display_mode) {
+		fprintf(stderr, "Display mode not been set\n");
+		exit(EXIT_FAILURE);
+	} else if (!strcmp(args.display_mode, "fb")) {
 		fb_set_info(&fb_info, WIDTH, HEIGHT, FB_PATH);
 		ret = fb_init(&fb_info);
 		if (ret < 0)
