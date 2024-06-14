@@ -9,12 +9,13 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include "video.h"
+#include "level_log.h"
 
 void camera_query_capability(int fd)
 {
 	struct v4l2_capability cap;
 	if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0)
-		perror("video query error");
+		LOG_ERROR("video query error");
 	else {
 		printf("\nvideo query capability:\n");
 		printf(INDENT"driver  name: %s\n", cap.driver);
