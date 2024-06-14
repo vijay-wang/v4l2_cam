@@ -30,7 +30,7 @@ enum {
 int main(void)
 {
 	int fd, ret;
-	unsigned char *fb_ptr;
+	struct fb_handle fb_handle;
 	unsigned char *rgb_frame;
 	struct mbuf bufs[BUFFER_COUNT];
 	struct v4l2_format fmt;
@@ -97,39 +97,9 @@ int main(void)
 	 else
 		printf("camera_streamon success\n");
 
-	///* dequeu buffer */
-	//mbuffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	//ret = camera_dqbuffer(fd, &mbuffer);
-	//if (ret < 0)
-	//	perror("camera_dqbuffer");
-	// else
-	//	printf("camera_dqbuffer success\n");
-	//
-	
-	// Open the framebuffer device
-	int fb_fd = fb_open(FB_PATH);
-	if (fb_fd == -1) {
-		perror("Opening framebuffer device");
-		return -1;
-	}
-
-	// Get variable screen information
-	if (fb_get_vscreen_info(fb_fd, &vinfo)) {
-		perror("Reading variable information");
-		return -1;
-	}
-
-	// Get fixed screen information
-	if (fb_get_fscreen_info(fb_fd, &finfo)) {
-		perror("Reading fixed information");
-		return -1;
-	}
-
-	fb_ptr = fb_map_framebuffer(fb_fd, &vinfo, &finfo);
-	if (fb_ptr == MAP_FAILED) {
-		perror("Error mapping framebuffer device to memory");
-		return -1;
-	}
+	ret = fb_init(FB_PATH, &vinfo, &finfo, &fb_handle);
+	if (ret < 0)
+		perror("fb_init failed\n");
 
 	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
 
@@ -161,7 +131,7 @@ int main(void)
 			}
 		}
 
-		fb_display_rgb_frame(WIDTH, HEIGHT, &vinfo, rgb_frame, fb_ptr);
+		fb_display_rgb_frame(WIDTH, HEIGHT, &vinfo, rgb_frame, fb_handle.fb_ptr);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			perror("Queue Buffer");
@@ -169,23 +139,9 @@ int main(void)
 		}
 	}
 	camera_free_rgb(rgb_frame);
-#if 0
-	/* save image */
-	int img_file = open("./image", O_RDWR | O_CREAT, 0666);
-	if (img_file < 0)
-		perror("open");
-	else {
-		ret = write(img_file, bufs[mbuffer.index].pbuf, mbuffer.length);
-		if (ret < 0)
-			perror("write");
-		close(img_file);
-	}
-
-	unsigned char *mjpeg_frame = bufs[mbuffer.index].pbuf;
-	size_t frame_size = mbuffer.length;
-	rgb_image *image = decode_jpeg(mjpeg_frame, frame_size);
-	free_rgb_image(image);
-#endif
+	ret = fb_deinit(&fb_handle, &vinfo, &finfo);
+	if (ret < 0)
+		perror("fb_deinit failed");
 		
 	/* stream off */
 	ret = camera_streamoff(fd, &type);

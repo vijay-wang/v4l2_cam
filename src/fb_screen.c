@@ -1,6 +1,8 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <error.h>
 #include <sys/mman.h>
 #include "fb_screen.h"
 
@@ -54,8 +56,51 @@ void fb_display_rgb_frame(const unsigned int width, const unsigned int height, s
 }
 
 // Map framebuffer to user space
-unsigned char *fb_map_framebuffer(int fb_fd, struct fb_var_screeninfo *vinfo, struct fb_fix_screeninfo *finfo)
+unsigned char *fb_mmap_framebuffer(int fb_fd, struct fb_var_screeninfo *vinfo, struct fb_fix_screeninfo *finfo)
 {
 	long screensize = vinfo->yres_virtual * finfo->line_length;
 	return (unsigned char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
+}
+
+int fb_munmap_framebuffer(unsigned char *addr, struct fb_var_screeninfo *vinfo, struct fb_fix_screeninfo *finfo)
+{
+	long screensize = vinfo->yres_virtual * finfo->line_length;
+	return munmap(addr, screensize);
+}
+
+int fb_init(char *fb_path, struct fb_var_screeninfo *vinfo, struct fb_fix_screeninfo *finfo, struct fb_handle *fb_handle)
+{
+	// Open the framebuffer device
+	fb_handle->fb_fd = fb_open(fb_path);
+	if (fb_handle->fb_fd == -1) {
+		perror("Opening framebuffer device");
+		return -1;
+	}
+
+	// Get variable screen information
+	if (fb_get_vscreen_info(fb_handle->fb_fd, vinfo)) {
+		perror("Reading variable information");
+		return -1;
+	}
+
+	// Get fixed screen information
+	if (fb_get_fscreen_info(fb_handle->fb_fd, finfo)) {
+		perror("Reading fixed information");
+		return -1;
+	}
+
+	fb_handle->fb_ptr = fb_mmap_framebuffer(fb_handle->fb_fd, vinfo, finfo);
+	if (fb_handle->fb_ptr == MAP_FAILED) {
+		perror("Error mapping framebuffer device to memory");
+		return -1;
+	}
+	return 0;
+}
+
+int fb_deinit(struct fb_handle *fb_handle, struct fb_var_screeninfo *vinfo, struct fb_fix_screeninfo *finfo)
+{
+	int ret;
+	ret = fb_close(fb_handle->fb_fd);
+	ret |= fb_munmap_framebuffer(fb_handle->fb_ptr, vinfo, finfo);
+	return ret;
 }
