@@ -14,8 +14,12 @@
 #define BUFFER_COUNT	4
 //#define WIDTH		640
 //#define HEIGHT	480
-#define WIDTH		1280
-#define HEIGHT		720
+//#define WIDTH		1280
+//#define HEIGHT		720
+#define WIDTH		320
+#define HEIGHT		180
+
+
 
 #define FB_PATH	"/dev/fb0"
 
@@ -30,14 +34,12 @@ enum {
 int main(void)
 {
 	int fd, ret;
-	struct fb_handle fb_handle;
 	unsigned char *rgb_frame;
 	struct mbuf bufs[BUFFER_COUNT];
 	struct v4l2_format fmt;
 	struct v4l2_requestbuffers reqbuffer;
 	struct v4l2_buffer mbuffer;
-	struct fb_var_screeninfo vinfo;
-	struct fb_fix_screeninfo finfo;
+	struct fb_info fb_info;
 
 	fd = camera_open(VIDEO_DEV);
 	if (fd < 0) {
@@ -97,11 +99,11 @@ int main(void)
 	 else
 		printf("camera_streamon success\n");
 
-	ret = fb_init(FB_PATH, &vinfo, &finfo, &fb_handle);
+	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
+	fb_set_info(&fb_info, WIDTH, HEIGHT, FB_PATH);
+	ret = fb_init(&fb_info);
 	if (ret < 0)
 		perror("fb_init failed\n");
-
-	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
 
 	while (1) {
 		fd_set fds;
@@ -131,17 +133,17 @@ int main(void)
 			}
 		}
 
-		fb_display_rgb_frame(WIDTH, HEIGHT, &vinfo, rgb_frame, fb_handle.fb_ptr);
+		fb_display_rgb_frame(&fb_info, rgb_frame);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			perror("Queue Buffer");
 			return -1;
 		}
 	}
-	camera_free_rgb(rgb_frame);
-	ret = fb_deinit(&fb_handle, &vinfo, &finfo);
+	ret = fb_deinit(&fb_info);
 	if (ret < 0)
 		perror("fb_deinit failed");
+	camera_free_rgb(rgb_frame);
 		
 	/* stream off */
 	ret = camera_streamoff(fd, &type);
