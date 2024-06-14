@@ -14,18 +14,20 @@
 #include "sdl_display.h"
 
 #define BUFFER_COUNT	4
-//#define WIDTH		640
-//#define HEIGHT	480
-//#define WIDTH		1280
-//#define HEIGHT		720
-#define WIDTH		320
-#define HEIGHT		180
+//#define width		640
+//#define height	480
+//#define width		1280
+//#define height		720
+//#define width		320
+//#define height		180
 
 #define FB_PATH	"/dev/fb0"
 
 struct opt_args {
 	char *pixel_format;
 	char *display_mode;
+	char *width;
+	char *height;
 };
 
 void usage(void)
@@ -33,10 +35,14 @@ void usage(void)
 	printf(	"v4l2_cam usage:\n"
 		"	-d display mode, sdl or fb\n"
 		"	-f pixel format, yuyv or mjpeg\n"
+		"	-W set pixel width\n"
+		"	-H set pixel height\n"
+		"	-l list the resolutions supported by the camera\n"
+		"	-q query the basic infomation about the driver and camera\n"
 		"	-h help\n");
 }
 
-void parse_args(struct opt_args *args, int argc, char **argv)
+void parse_args(int fd, struct opt_args *args, int argc, char **argv)
 {
 	char ch;
 
@@ -45,7 +51,7 @@ void parse_args(struct opt_args *args, int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	while ((ch = getopt(argc, argv, "d:f:h")) != -1)  {
+	while ((ch = getopt(argc, argv, "d:f:W:H:lqh")) != -1)  {
 		switch (ch) {
 		case 'd':
 			args->display_mode = optarg;
@@ -53,11 +59,26 @@ void parse_args(struct opt_args *args, int argc, char **argv)
 		case 'f':
 			args->pixel_format = optarg;
 			break;
+		case 'W':
+			args->width = optarg;
+			break;
+		case 'H':
+			args->height = optarg;
+			break;
+		case 'q':
+			camera_query_capability(fd);
+			break;
+		case 'l':
+			camera_list_fmt(fd);
+			break;
+
 		case 'h':
 			usage();
+			camera_close(fd);
 			exit(EXIT_SUCCESS);
 		default:
 			usage();
+			camera_close(fd);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -73,6 +94,7 @@ int main(int argc, char *argv[])
 {
 	int fd, ret;
 	unsigned char *rgb_frame;
+	unsigned int width, height;
 	struct mbuf bufs[BUFFER_COUNT];
 	struct v4l2_format fmt;
 	struct v4l2_requestbuffers reqbuffer;
@@ -89,8 +111,6 @@ int main(int argc, char *argv[])
 	memset(&sdl_info, 0, sizeof(struct opt_args));
 	memset(&args, 0, sizeof(struct opt_args));
 
-	parse_args(&args, argc, argv);
-
 	fd = camera_open(VIDEO_DEV);
 	if (fd < 0) {
 		LOG_ERROR("camera_open failed");
@@ -98,13 +118,14 @@ int main(int argc, char *argv[])
 	} else
 		LOG_INFO("camera_open success\n");
 
-	camera_query_capability(fd);
-	camera_list_fmt(fd);
+	parse_args(fd, &args, argc, argv);
+	width = atoi(args.width);
+	height = atoi(args.height);
 
 	/* set format */
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	fmt.fmt.pix.width = WIDTH;
-	fmt.fmt.pix.height = HEIGHT;
+	fmt.fmt.pix.width = width;
+	fmt.fmt.pix.height = height;
 	if (!args.pixel_format) {
 		LOG_ERROR("Pixel format not been set\n");
 		exit(EXIT_FAILURE);
@@ -156,18 +177,18 @@ int main(int argc, char *argv[])
 	 else
 		LOG_INFO("camera_streamon success\n");
 
-	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
+	rgb_frame = (unsigned char *)camera_alloc_rgb(width, height);
 
 	if (!args.display_mode) {
 		LOG_ERROR("Display mode not been set\n");
 		exit(EXIT_FAILURE);
 	} else if (!strcmp(args.display_mode, "fb")) {
-		fb_set_info(&fb_info, WIDTH, HEIGHT, FB_PATH);
+		fb_set_info(&fb_info, width, height, FB_PATH);
 		ret = fb_init(&fb_info);
 		if (ret < 0)
 			LOG_ERROR("fb_init failed\n");
 	} else if (!strcmp(args.display_mode, "sdl")) {
-		ret = sdl_init(&sdl_info, WIDTH, HEIGHT);
+		ret = sdl_init(&sdl_info, width, height);
 		if (ret < 0)
 			LOG_ERROR("sdl_init");
 	} else {
@@ -196,9 +217,9 @@ int main(int argc, char *argv[])
 		}
 
 		if (!strcmp(args.pixel_format, "yuyv"))
-			yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, WIDTH, HEIGHT);
+			yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
 		else if (!strcmp(args.pixel_format, "mjpeg")) {
-			int result = mjpeg2rgb(bufs[mbuffer.index].pbuf, mbuffer.length, rgb_frame, WIDTH, HEIGHT);
+			int result = mjpeg2rgb(bufs[mbuffer.index].pbuf, mbuffer.length, rgb_frame, width, height);
 			if (result != 0) {
 				LOG_WARNING("mjpeg decode failed\n");
 				continue;
