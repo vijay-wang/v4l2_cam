@@ -3,7 +3,7 @@ INCLUDE=-I./include
 CC=gcc
 SRC=$(wildcard *.c) $(wildcard ./src/*.c)
 OBJ=$(patsubst %.c,%.o,$(SRC))
-LIBFLAGS=-ljpeg
+LIBFLAGS=-ljpeg -lSDL2
 
 ${target}: ${OBJ}
 	${CC} $^ ${INCLUDE} -o $@ $(LIBFLAGS) 
