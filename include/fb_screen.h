@@ -2,6 +2,8 @@
 #define _FB_SCREEN_H
 #include <linux/fb.h>
 
+#define FB_PATH	"/dev/fb0"
+
 struct fb_handle {
 	int fb_fd;
 	unsigned char *fb_ptr;

@@ -14,14 +14,6 @@
 #include "sdl_display.h"
 
 #define BUFFER_COUNT	4
-//#define width		640
-//#define height	480
-//#define width		1280
-//#define height		720
-//#define width		320
-//#define height		180
-
-#define FB_PATH	"/dev/fb0"
 
 struct opt_args {
 	char *pixel_format;
@@ -116,7 +108,7 @@ int main(int argc, char *argv[])
 		LOG_ERROR("camera_open failed");
 		return fd;
 	} else
-		LOG_INFO("camera_open success\n");
+		LOG_DEBUG("camera_open success\n");
 
 	parse_args(fd, &args, argc, argv);
 	width = atoi(args.width);
@@ -141,7 +133,7 @@ int main(int argc, char *argv[])
 	if (ret < 0)
 		LOG_ERROR("camera_set_format failed");
 	 else
-		LOG_INFO("camera_set_format success\n");
+		LOG_DEBUG("camera_set_format success\n");
 
 	/* request buffers */
 	reqbuffer.count = BUFFER_COUNT;
@@ -151,7 +143,7 @@ int main(int argc, char *argv[])
 	if (ret < 0)
 		LOG_ERROR("camera_request_buffers failed");
 	 else
-		LOG_INFO("camera_request_buffers success\n");
+		LOG_DEBUG("camera_request_buffers success\n");
 
 	/* query buffers, map buffers, enqueue buffers */
 	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
@@ -175,7 +167,7 @@ int main(int argc, char *argv[])
 	if (ret < 0)
 		LOG_ERROR("camera_streamon failed");
 	 else
-		LOG_INFO("camera_streamon success\n");
+		LOG_DEBUG("camera_streamon success\n");
 
 	rgb_frame = (unsigned char *)camera_alloc_rgb(width, height);
 
@@ -253,7 +245,7 @@ int main(int argc, char *argv[])
 	if (ret < 0)
 		LOG_ERROR("camera_streamoff failed");
 	 else
-		LOG_INFO("camera_streamoff success\n");
+		LOG_DEBUG("camera_streamoff success\n");
 
 	/* unmap buffers */
 	for (int i = 0; i < BUFFER_COUNT; ++i) {
