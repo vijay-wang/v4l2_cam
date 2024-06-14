@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include "video.h"
 #include "level_log.h"
@@ -82,6 +83,12 @@ void parse_args(int fd, struct opt_args *args, int argc, char **argv)
 	}
 }
 
+static int main_run = 0;
+void sighandler(int sig)
+{
+	main_run = 0;
+}
+
 int main(int argc, char *argv[])
 {
 	int fd, ret;
@@ -103,9 +110,14 @@ int main(int argc, char *argv[])
 	memset(&sdl_info, 0, sizeof(struct opt_args));
 	memset(&args, 0, sizeof(struct opt_args));
 
+	signal(SIGINT, sighandler);
+	signal(SIGKILL, sighandler);
+	signal(SIGSTOP, sighandler);
+	signal(SIGHUP, sighandler);
+
 	fd = camera_open(VIDEO_DEV);
 	if (fd < 0) {
-		LOG_ERROR("camera_open failed");
+		LOG_ERROR("camera_open failed\n");
 		return fd;
 	} else
 		LOG_DEBUG("camera_open success\n");
@@ -131,7 +143,7 @@ int main(int argc, char *argv[])
 	}
 	ret = camera_set_format(fd, &fmt);
 	if (ret < 0)
-		LOG_ERROR("camera_set_format failed");
+		LOG_ERROR("camera_set_format failed\n");
 	 else
 		LOG_DEBUG("camera_set_format success\n");
 
@@ -141,7 +153,7 @@ int main(int argc, char *argv[])
 	reqbuffer.memory = V4L2_MEMORY_MMAP;
 	ret = camera_request_buffers(fd, &reqbuffer);
 	if (ret < 0)
-		LOG_ERROR("camera_request_buffers failed");
+		LOG_ERROR("camera_request_buffers failed\n");
 	 else
 		LOG_DEBUG("camera_request_buffers success\n");
 
@@ -152,20 +164,20 @@ int main(int argc, char *argv[])
 		mbuffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		ret = camera_query_buffer(fd, &mbuffer);
 		if (ret < 0)
-			LOG_ERROR("camera_query_buffers failed");
+			LOG_ERROR("camera_query_buffers failed\n");
 		ret = camera_map_buffer(fd, &mbuffer, &bufs[i]);
 		if (ret < 0)
-			LOG_ERROR("camera_map_buffers failed");
+			LOG_ERROR("camera_map_buffers failed\n");
 		ret = camera_qbuffer(fd, &mbuffer);
 		if (ret < 0)
-			LOG_ERROR("camera_qbuffer failed");
+			LOG_ERROR("camera_qbuffer failed\n");
 	}
 
 	/* stream on */
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	ret = camera_streamon(fd, &type);
 	if (ret < 0)
-		LOG_ERROR("camera_streamon failed");
+		LOG_ERROR("camera_streamon failed\n");
 	 else
 		LOG_DEBUG("camera_streamon success\n");
 
@@ -182,14 +194,14 @@ int main(int argc, char *argv[])
 	} else if (!strcmp(args.display_mode, "sdl")) {
 		ret = sdl_init(&sdl_info, width, height);
 		if (ret < 0)
-			LOG_ERROR("sdl_init");
+			LOG_ERROR("sdl_init failed\n");
 	} else {
 		LOG_ERROR("Unkown display_mode\n");
 		exit(EXIT_FAILURE);
 	}
 
-
-	while (1) {
+	main_run = 1;
+	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
 		FD_SET(fd, &fds);
@@ -197,13 +209,13 @@ int main(int argc, char *argv[])
 		tv.tv_sec = 5;
 		int r = select(fd + 1, &fds, NULL, NULL, &tv);
 		if (-1 == r) {
-			LOG_WARNING("Waiting for Frame time out 5s");
+			LOG_WARNING("Waiting for Frame time out 5s\n");
 			//break;
 			continue;
 		}
 
 		if (camera_dqbuffer(fd, &mbuffer) == -1) {
-			LOG_WARNING("Retrieving Frame failed");
+			LOG_WARNING("Retrieving Frame failed\n");
 			continue;
 			//return 1;
 		}
@@ -225,7 +237,7 @@ int main(int argc, char *argv[])
 			sdl_dislpay(&sdl_info, rgb_frame);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
-			LOG_WARNING("Queue Buffer failed");
+			LOG_WARNING("Queue Buffer failed\n");
 			continue;
 			//break;
 		}
@@ -234,7 +246,7 @@ int main(int argc, char *argv[])
 	if (!strcmp(args.display_mode, "fb")) {
 		ret = fb_deinit(&fb_info);
 		if (ret < 0)
-			LOG_ERROR("fb_deinit failed");
+			LOG_ERROR("fb_deinit failed\n");
 	} else if (!strcmp(args.display_mode, "sdl"))
 		sdl_deinit(&sdl_info);
 		
@@ -243,7 +255,7 @@ int main(int argc, char *argv[])
 	/* stream off */
 	ret = camera_streamoff(fd, &type);
 	if (ret < 0)
-		LOG_ERROR("camera_streamoff failed");
+		LOG_ERROR("camera_streamoff failed\n");
 	 else
 		LOG_DEBUG("camera_streamoff success\n");
 
@@ -251,7 +263,7 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < BUFFER_COUNT; ++i) {
 		ret = camera_munmap_buffer(&bufs[i]);
 		if (ret < 0)
-			LOG_ERROR("camera_munmap_buffer failed");
+			LOG_ERROR("camera_munmap_buffer failed\n");
 	}
 	camera_close(fd);
 	return 0;
