@@ -1,5 +1,5 @@
-#ifndef _LIBCAMERA_H
-#define _LIBCAMERA_H
+#ifndef _video_H
+#define _video_H
 
 #define VIDEO_DEV	"/dev/video0"
 #define INDENT		"  "

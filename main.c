@@ -7,7 +7,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include "libcamera.h"
+#include "video.h"
+#include "v4l2_cam_log.h"
 #include "algorithm.h"
 #include "fb_screen.h"
 #include "sdl_display.h"
@@ -57,13 +58,12 @@ void parse_args(struct opt_args *args, int argc, char **argv)
 			exit(EXIT_SUCCESS);
 		default:
 			usage();
-			printf("default\n");
 			exit(EXIT_FAILURE);
 		}
 	}
 
 	for (int i = optind; i < argc; i++) {
-		fprintf(stderr, "Error: Invalid argument '%s'\n", argv[i]);
+		LOG_ERROR("Error: Invalid argument '%s'\n", argv[i]);
 		usage();
 		exit(EXIT_FAILURE);
 	}
@@ -93,10 +93,10 @@ int main(int argc, char *argv[])
 
 	fd = camera_open(VIDEO_DEV);
 	if (fd < 0) {
-		perror("camera_open");
+		LOG_ERROR("camera_open failed");
 		return fd;
 	} else
-		printf("camera_open success\n");
+		LOG_INFO("camera_open success\n");
 
 	camera_query_capability(fd);
 	camera_list_fmt(fd);
@@ -106,21 +106,21 @@ int main(int argc, char *argv[])
 	fmt.fmt.pix.width = WIDTH;
 	fmt.fmt.pix.height = HEIGHT;
 	if (!args.pixel_format) {
-		fprintf(stderr, "Pixel format not been set\n");
+		LOG_ERROR("Pixel format not been set\n");
 		exit(EXIT_FAILURE);
 	} else if (!strcmp(args.pixel_format, "yuyv"))
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
 	else if (!strcmp(args.pixel_format, "mjpeg"))
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
 	else {
-		fprintf(stderr, "Unkown pixel format\n");
+		LOG_ERROR("Unkown pixel format\n");
 		exit(EXIT_FAILURE);
 	}
 	ret = camera_set_format(fd, &fmt);
 	if (ret < 0)
-		perror("camera_set_format");
+		LOG_ERROR("camera_set_format failed");
 	 else
-		printf("camera_set_format success\n");
+		LOG_INFO("camera_set_format success\n");
 
 	/* request buffers */
 	reqbuffer.count = BUFFER_COUNT;
@@ -128,9 +128,9 @@ int main(int argc, char *argv[])
 	reqbuffer.memory = V4L2_MEMORY_MMAP;
 	ret = camera_request_buffers(fd, &reqbuffer);
 	if (ret < 0)
-		perror("camera_request_buffers");
+		LOG_ERROR("camera_request_buffers failed");
 	 else
-		printf("camera_request_buffers success\n");
+		LOG_INFO("camera_request_buffers success\n");
 
 	/* query buffers, map buffers, enqueue buffers */
 	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
@@ -139,39 +139,39 @@ int main(int argc, char *argv[])
 		mbuffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		ret = camera_query_buffer(fd, &mbuffer);
 		if (ret < 0)
-			perror("camera_query_buffers");
+			LOG_ERROR("camera_query_buffers failed");
 		ret = camera_map_buffer(fd, &mbuffer, &bufs[i]);
 		if (ret < 0)
-			perror("camera_map_buffers");
+			LOG_ERROR("camera_map_buffers failed");
 		ret = camera_qbuffer(fd, &mbuffer);
 		if (ret < 0)
-			perror("camera_qbuffer");
+			LOG_ERROR("camera_qbuffer failed");
 	}
 
 	/* stream on */
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	ret = camera_streamon(fd, &type);
 	if (ret < 0)
-		perror("camera_streamon");
+		LOG_ERROR("camera_streamon failed");
 	 else
-		printf("camera_streamon success\n");
+		LOG_INFO("camera_streamon success\n");
 
 	rgb_frame = (unsigned char *)camera_alloc_rgb(WIDTH, HEIGHT);
 
 	if (!args.display_mode) {
-		fprintf(stderr, "Display mode not been set\n");
+		LOG_ERROR("Display mode not been set\n");
 		exit(EXIT_FAILURE);
 	} else if (!strcmp(args.display_mode, "fb")) {
 		fb_set_info(&fb_info, WIDTH, HEIGHT, FB_PATH);
 		ret = fb_init(&fb_info);
 		if (ret < 0)
-			perror("fb_init failed\n");
+			LOG_ERROR("fb_init failed\n");
 	} else if (!strcmp(args.display_mode, "sdl")) {
 		ret = sdl_init(&sdl_info, WIDTH, HEIGHT);
 		if (ret < 0)
-			perror("sdl_init");
+			LOG_ERROR("sdl_init");
 	} else {
-		fprintf(stderr, "Unkown display_mode\n");
+		LOG_ERROR("Unkown display_mode\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -184,12 +184,13 @@ int main(int argc, char *argv[])
 		tv.tv_sec = 5;
 		int r = select(fd + 1, &fds, NULL, NULL, &tv);
 		if (-1 == r) {
-			perror("Waiting for Frame");
-			break;
+			LOG_WARNING("Waiting for Frame time out 5s");
+			//break;
+			continue;
 		}
 
 		if (camera_dqbuffer(fd, &mbuffer) == -1) {
-			perror("Retrieving Frame");
+			LOG_WARNING("Retrieving Frame failed");
 			continue;
 			//return 1;
 		}
@@ -199,8 +200,9 @@ int main(int argc, char *argv[])
 		else if (!strcmp(args.pixel_format, "mjpeg")) {
 			int result = mjpeg2rgb(bufs[mbuffer.index].pbuf, mbuffer.length, rgb_frame, WIDTH, HEIGHT);
 			if (result != 0) {
-				printf("mjpeg decode failed\n");
-				break;
+				LOG_WARNING("mjpeg decode failed\n");
+				continue;
+				//break;
 			}
 		}
 
@@ -210,15 +212,16 @@ int main(int argc, char *argv[])
 			sdl_dislpay(&sdl_info, rgb_frame);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
-			perror("Queue Buffer");
-			break;
+			LOG_WARNING("Queue Buffer failed");
+			continue;
+			//break;
 		}
 	}
 
 	if (!strcmp(args.display_mode, "fb")) {
 		ret = fb_deinit(&fb_info);
 		if (ret < 0)
-			perror("fb_deinit failed");
+			LOG_ERROR("fb_deinit failed");
 	} else if (!strcmp(args.display_mode, "sdl"))
 		sdl_deinit(&sdl_info);
 		
@@ -227,15 +230,15 @@ int main(int argc, char *argv[])
 	/* stream off */
 	ret = camera_streamoff(fd, &type);
 	if (ret < 0)
-		perror("camera_streamoff");
+		LOG_ERROR("camera_streamoff failed");
 	 else
-		printf("camera_streamoff success\n");
+		LOG_INFO("camera_streamoff success\n");
 
 	/* unmap buffers */
 	for (int i = 0; i < BUFFER_COUNT; ++i) {
 		ret = camera_munmap_buffer(&bufs[i]);
 		if (ret < 0)
-			perror("camera_munmap_buffer");
+			LOG_ERROR("camera_munmap_buffer failed");
 	}
 	camera_close(fd);
 	return 0;

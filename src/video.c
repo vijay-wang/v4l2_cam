@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/mman.h>
-#include "libcamera.h"
+#include "video.h"
 
 void camera_query_capability(int fd)
 {
