@@ -5,6 +5,7 @@
 #include <error.h>
 #include <sys/mman.h>
 #include "fb_screen.h"
+#include "level_log.h"
 
 // Get variable screen information
 static int fb_get_vscreen_info(int fb_fd, struct fb_var_screeninfo *vinfo)
@@ -73,25 +74,25 @@ int fb_init(struct fb_info *fb_info)
 	// Open the framebuffer device
 	fb_info->fb_handle.fb_fd = fb_open(fb_info->fb_path);
 	if (fb_info->fb_handle.fb_fd == -1) {
-		perror("Opening framebuffer device");
+		LOG_ERROR("Opening framebuffer device");
 		return -1;
 	}
 
 	// Get variable screen information
 	if (fb_get_vscreen_info(fb_info->fb_handle.fb_fd, &fb_info->vinfo)) {
-		perror("Reading variable information");
+		LOG_ERROR("Reading variable information");
 		return -1;
 	}
 
 	// Get fixed screen information
 	if (fb_get_fscreen_info(fb_info->fb_handle.fb_fd, &fb_info->finfo)) {
-		perror("Reading fixed information");
+		LOG_ERROR("Reading fixed information");
 		return -1;
 	}
 
 	fb_info->fb_handle.fb_ptr = fb_mmap_framebuffer(fb_info->fb_handle.fb_fd, &fb_info->vinfo, &fb_info->finfo);
 	if (fb_info->fb_handle.fb_ptr == MAP_FAILED) {
-		perror("Error mapping framebuffer device to memory");
+		LOG_ERROR("Error mapping framebuffer device to memory");
 		return -1;
 	}
 	return 0;
