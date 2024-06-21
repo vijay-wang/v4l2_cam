@@ -37,7 +37,7 @@ void usage(void)
 
 void parse_args(int fd, struct opt_args *args, int argc, char **argv)
 {
-	char ch;
+	int ch;
 
 	if (argc < 2) {
 		usage();
