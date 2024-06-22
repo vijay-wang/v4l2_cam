@@ -1,46 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <jpeglib.h>
 #include "algorithm.h"
-
-int mjpeg2rgb(unsigned char* mjpeg_data, long size, unsigned char* rgb_data, int width, int height) {
-	struct jpeg_decompress_struct cinfo;
-	struct jpeg_error_mgr jerr;
-
-	cinfo.err = jpeg_std_error(&jerr);
-	jpeg_create_decompress(&cinfo);
-
-	jpeg_mem_src(&cinfo, mjpeg_data, size);
-	jpeg_read_header(&cinfo, TRUE);
-	jpeg_start_decompress(&cinfo);
-
-	// 取消了宽高检查
-	// if (cinfo.output_width != width || cinfo.output_height != height || cinfo.output_components != 3) {
-	//    fprintf(stderr, "Unexpected image size or format\n");
-	//    jpeg_finish_decompress(&cinfo);
-	//    jpeg_destroy_decompress(&cinfo);
-	//    return -1;
-	//}
-
-	int row_stride = width * cinfo.output_components; // 修正了行对齐问题
-	while (cinfo.output_scanline < cinfo.output_height) {
-		unsigned char *buffer_array[1];
-		buffer_array[0] = rgb_data + (cinfo.output_scanline) * row_stride;
-		jpeg_read_scanlines(&cinfo, buffer_array, 1);
-	}
-
-	jpeg_finish_decompress(&cinfo);
-	jpeg_destroy_decompress(&cinfo);
-
-	return 0;
-}
 
 void yuyv2rgb(unsigned char *yuyv, unsigned char *rgb, int width, int height)
 {
 	int frame_size = width * height * 2;
 	int rgb_index = 0;
+	int i;
 
-	for (int i = 0; i < frame_size; i += 4) {
+	for (i = 0; i < frame_size; i += 4) {
 		int y1 = yuyv[i];
 		int u = yuyv[i + 1] - 128;
 		int y2 = yuyv[i + 2];

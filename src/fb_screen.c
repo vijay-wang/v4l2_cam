@@ -34,8 +34,9 @@ static int fb_close(int fb_fd)
 // Display rgb frame
 void fb_display_rgb_frame(struct fb_info *fb_info, unsigned char *rgb_frame)
 {
-	for (int y = 0; y < fb_info->height; y++) {
-		for (int x = 0; x < fb_info->width; x++) {
+	int y, x;
+	for (y = 0; y < fb_info->height; y++) {
+		for (x = 0; x < fb_info->width; x++) {
 			int fb_index = (y * fb_info->vinfo.xres + x) * (fb_info->vinfo.bits_per_pixel / 8);
 			int rgb_index = (y * fb_info->width + x) * 3;
 

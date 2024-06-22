@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/mman.h>
@@ -12,7 +13,6 @@
 #include "level_log.h"
 #include "algorithm.h"
 #include "fb_screen.h"
-#include "sdl_display.h"
 
 #define BUFFER_COUNT	4
 
@@ -26,10 +26,10 @@ struct opt_args {
 void usage(void)
 {
 	printf(	"v4l2_cam usage:\n"
-		"	-d display mode, sdl or fb\n"
-		"	-f pixel format, yuyv or mjpeg\n"
+		"	-f pixel format, yuyv\n"
 		"	-W set pixel width\n"
 		"	-H set pixel height\n"
+		"	-d set display way\n"
 		"	-l list the resolutions supported by the camera\n"
 		"	-q query the basic infomation about the driver and camera\n"
 		"	-h help\n");
@@ -76,7 +76,8 @@ void parse_args(int fd, struct opt_args *args, int argc, char **argv)
 		}
 	}
 
-	for (int i = optind; i < argc; i++) {
+	int i;
+	for (i = optind; i < argc; i++) {
 		LOG_ERROR("Error: Invalid argument '%s'\n", argv[i]);
 		usage();
 		exit(EXIT_FAILURE);
@@ -99,7 +100,6 @@ int main(int argc, char *argv[])
 	struct v4l2_requestbuffers reqbuffer;
 	struct v4l2_buffer mbuffer;
 	struct fb_info fb_info;
-	struct sdl_info sdl_info;
 	struct opt_args args;
 
 	memset(bufs, 0, sizeof(bufs));
@@ -107,7 +107,6 @@ int main(int argc, char *argv[])
 	memset(&reqbuffer, 0, sizeof(struct v4l2_requestbuffers));
 	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
 	memset(&fb_info, 0, sizeof(struct fb_info));
-	memset(&sdl_info, 0, sizeof(struct opt_args));
 	memset(&args, 0, sizeof(struct opt_args));
 
 	signal(SIGINT, sighandler);
@@ -135,8 +134,6 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	} else if (!strcmp(args.pixel_format, "yuyv"))
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-	else if (!strcmp(args.pixel_format, "mjpeg"))
-		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
 	else {
 		LOG_ERROR("Unkown pixel format\n");
 		exit(EXIT_FAILURE);
@@ -159,7 +156,8 @@ int main(int argc, char *argv[])
 
 	/* query buffers, map buffers, enqueue buffers */
 	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
-	for (int i = 0; i < BUFFER_COUNT; ++i) {
+	int i;
+	for (i = 0; i < BUFFER_COUNT; ++i) {
 		mbuffer.index = i;
 		mbuffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		ret = camera_query_buffer(fd, &mbuffer);
@@ -191,10 +189,6 @@ int main(int argc, char *argv[])
 		ret = fb_init(&fb_info);
 		if (ret < 0)
 			LOG_ERROR("fb_init failed\n");
-	} else if (!strcmp(args.display_mode, "sdl")) {
-		ret = sdl_init(&sdl_info, width, height);
-		if (ret < 0)
-			LOG_ERROR("sdl_init failed\n");
 	} else {
 		LOG_ERROR("Unkown display_mode\n");
 		exit(EXIT_FAILURE);
@@ -222,19 +216,9 @@ int main(int argc, char *argv[])
 
 		if (!strcmp(args.pixel_format, "yuyv"))
 			yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
-		else if (!strcmp(args.pixel_format, "mjpeg")) {
-			int result = mjpeg2rgb(bufs[mbuffer.index].pbuf, mbuffer.length, rgb_frame, width, height);
-			if (result != 0) {
-				LOG_WARNING("mjpeg decode failed\n");
-				continue;
-				//break;
-			}
-		}
 
 		if (!strcmp(args.display_mode, "fb"))
 			fb_display_rgb_frame(&fb_info, rgb_frame);
-		else if (!strcmp(args.display_mode, "sdl"))
-			sdl_dislpay(&sdl_info, rgb_frame);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			LOG_WARNING("Queue Buffer failed\n");
@@ -247,9 +231,7 @@ int main(int argc, char *argv[])
 		ret = fb_deinit(&fb_info);
 		if (ret < 0)
 			LOG_ERROR("fb_deinit failed\n");
-	} else if (!strcmp(args.display_mode, "sdl"))
-		sdl_deinit(&sdl_info);
-		
+	}
 	camera_free_rgb(rgb_frame);
 		
 	/* stream off */
@@ -260,7 +242,7 @@ int main(int argc, char *argv[])
 		LOG_DEBUG("camera_streamoff success\n");
 
 	/* unmap buffers */
-	for (int i = 0; i < BUFFER_COUNT; ++i) {
+	for (i = 0; i < BUFFER_COUNT; ++i) {
 		ret = camera_munmap_buffer(&bufs[i]);
 		if (ret < 0)
 			LOG_ERROR("camera_munmap_buffer failed\n");
