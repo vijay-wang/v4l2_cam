@@ -26,7 +26,7 @@ struct opt_args {
 void usage(void)
 {
 	printf(	"v4l2_cam usage:\n"
-		"	-f pixel format, yuyv\n"
+		"	-f pixel format, yuyv, rgb565le\n"
 		"	-W set pixel width\n"
 		"	-H set pixel height\n"
 		"	-d set display way\n"
@@ -134,6 +134,8 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	} else if (!strcmp(args.pixel_format, "yuyv"))
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+	else if (!strcmp(args.pixel_format, "rgb565le"))
+		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB565;
 	else {
 		LOG_ERROR("Unkown pixel format\n");
 		exit(EXIT_FAILURE);
@@ -216,6 +218,8 @@ int main(int argc, char *argv[])
 
 		if (!strcmp(args.pixel_format, "yuyv"))
 			yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
+		if (!strcmp(args.pixel_format, "rgb565le"))
+			rgb565le2rgb888(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
 
 		if (!strcmp(args.display_mode, "fb"))
 			fb_display_rgb_frame(&fb_info, rgb_frame);

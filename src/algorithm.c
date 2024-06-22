@@ -38,3 +38,40 @@ void yuyv2rgb(unsigned char *yuyv, unsigned char *rgb, int width, int height)
 		rgb[rgb_index++] = b2 > 255 ? 255 : b2 < 0 ? 0 : b2;
 	}
 }
+
+
+// 将5位颜色分量转换为8位
+static inline unsigned convert_5bit_to_8bit(unsigned color) {
+	return (color << 3) | (color >> 2);
+}
+
+// 将6位颜色分量转换为8位
+static inline unsigned convert_6bit_to_8bit(unsigned color) {
+	return (color << 2) | (color >> 4);
+}
+
+// 将RGB565_LE格式转换为RGB888格式
+void rgb565le2rgb888(rgb565le *prgb565le, rgb888 *prgb888, unsigned int width, unsigned int height)
+{
+	unsigned int num_pixels = width * height;
+	int i;
+
+	for (i = 0; i < num_pixels; ++i) {
+		rgb565le pixel = prgb565le[i];
+
+		// 提取红色、绿色和蓝色分量
+		unsigned r5 = (pixel >> 11) & 0x1F;
+		unsigned g6 = (pixel >> 5) & 0x3F;
+		unsigned b5 = pixel & 0x1F;
+
+		// 转换为8位颜色分量
+		unsigned r8 = convert_5bit_to_8bit(r5);
+		unsigned g8 = convert_6bit_to_8bit(g6);
+		unsigned b8 = convert_5bit_to_8bit(b5);
+
+		// 将结果存储到RGB888缓冲区
+		prgb888[i][0] = r8;
+		prgb888[i][1] = g8;
+		prgb888[i][2] = b8;
+	}
+}
