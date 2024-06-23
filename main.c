@@ -18,7 +18,7 @@
 #include "vencode.h"
 
 #define BUFFER_COUNT	4
-
+#define FILE_SIZE_LIMIT (4 * 1024 * 1024) // 4MB
 struct opt_args {
 	char *pixel_format;
 	char *display_mode;
@@ -209,8 +209,12 @@ int main(int argc, char *argv[])
 	encoder = init_x264_encoder(&param, &pic_in, width, height);
 
 	main_run = 1;
-	int flag = 0;
-	int save_file = 0;
+
+	int file_count = 0;
+	int file_size = 0;
+	FILE *file = NULL;
+	char filename[64];
+
 	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
@@ -230,7 +234,6 @@ int main(int argc, char *argv[])
 			//return 1;
 		}
 
-		if (!(flag % 10)) {
 		yuyv_to_yuv420p(bufs[mbuffer.index].pbuf, &pic_in, width, height);
 		if (x264_encoder_encode(encoder, &nals, &num_nals, &pic_in, &pic_out) < 0) {
 			LOG_ERROR("Error encoding frame\n");
@@ -238,22 +241,26 @@ int main(int argc, char *argv[])
 		}
 
 
+		int i;
+		for (i = 0; i < num_nals; ++i) {
+			if (file_size + nals[i].i_payload > FILE_SIZE_LIMIT) {
+				if (file) {
+					fclose(file);
+				}
 
-			int file;
-			char filename[32];
-			sprintf(filename, "h2264.%d", save_file);
-			file = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0644);
-			if (fd == -1) {
-				perror("open");
-				return 1;
+				snprintf(filename, sizeof(filename), "h264_%d.h264", file_count++);
+				file = fopen(filename, "wb");
+				if (!file) {
+					LOG_ERROR("Error opening output file");
+					return -1;
+				}
+				file_size = 0;
 			}
 
-			//write(file, h264, width * height);
-
-
-			// 关闭文件
-			close(file);
-			save_file++;
+			if (file) {
+				fwrite(nals[i].p_payload, 1, nals[i].i_payload, file);
+				file_size += nals[i].i_payload;
+			}
 		}
 
 
@@ -262,7 +269,6 @@ int main(int argc, char *argv[])
 			continue;
 			//break;
 		}
-		flag++;
 	}
 
 	x264_picture_clean(&pic_in);
