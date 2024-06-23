@@ -9,10 +9,12 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <stdint.h>
 #include "video.h"
 #include "level_log.h"
 #include "algorithm.h"
 #include "fb_screen.h"
+#include "x264.h"
 
 #define BUFFER_COUNT	4
 
@@ -197,6 +199,44 @@ int main(int argc, char *argv[])
 	}
 
 	unsigned char *h264 = (unsigned char *)malloc(width * height);  // H.264输出缓冲区
+	if (!h264) {
+		LOG_ERROR("Failed to allocate h264 frame\n");
+		return -1;
+	}
+	unsigned char *i420_frame = (unsigned char *)malloc(width * height * 3 / 2);
+	if (!i420_frame) {
+		LOG_ERROR("Failed to allocate I420 frame\n");
+		return -1;
+	}
+
+	// Initialize x264 encoder
+	x264_param_t param;
+	x264_t *encoder;
+	int csp = X264_CSP_I420;
+
+	x264_param_default_preset(&param, "medium", "zerolatency");
+	param.i_width = width;
+	param.i_height = height;
+	param.i_csp = csp;
+	param.rc.i_rc_method = X264_RC_CRF;
+	param.rc.f_rf_constant = 25;
+	param.rc.f_rf_constant_max = 35;
+	param.i_fps_num = 30;
+	param.i_fps_den = 1;
+	param.b_vfr_input = 0;
+
+	if (x264_param_apply_profile(&param, "high") < 0) {
+		fprintf(stderr, "Failed to set profile\n");
+		return;
+	}
+
+	//open encoder
+	encoder = x264_encoder_open(&param);
+	if (!encoder) {
+		fprintf(stderr, "Failed to open encoder\n");
+		return;
+	}
+
 	main_run = 0;
 	while (main_run) {
 		fd_set fds;
@@ -217,19 +257,7 @@ int main(int argc, char *argv[])
 			//return 1;
 		}
 
-
-		// TODO: 填充yuyv数据
-
-		yuyv2h264(bufs[mbuffer.index].pbuf, h264, width, height);
-
-		//if (!strcmp(args.pixel_format, "yuyv"))
-		//	yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
-		//if (!strcmp(args.pixel_format, "rgb565le"))
-		//	rgb565le2rgb888(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
-
-		//if (!strcmp(args.display_mode, "fb"))
-		//	fb_display_rgb_frame(&fb_info, rgb_frame);
-
+		yuyv2h264(encoder, i420_frame, bufs[mbuffer.index].pbuf, h264, width, height);
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			LOG_WARNING("Queue Buffer failed\n");
 			continue;
@@ -237,6 +265,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	x264_encoder_close(encoder);
+	free(i420_frame);
 	free(h264);
 
 	if (!strcmp(args.display_mode, "fb")) {
