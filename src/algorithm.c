@@ -82,19 +82,26 @@ void yuyv_to_yuv420p(unsigned char *yuyv, x264_picture_t *pic, unsigned int widt
 	unsigned char *y = pic->img.plane[0];
 	unsigned char *u = pic->img.plane[1];
 	unsigned char *v = pic->img.plane[2];
-	int j, i;
+
+	unsigned char *py = y;
+	unsigned char *pu = u;
+	unsigned char *pv = v;
+
+	unsigned char *pyuyv = yuyv;
+	int j;
 
 	for (j = 0; j < height; j++) {
-		for (i = 0; i < width; i += 2) {
-			int index = j * width + i;
-			int y_index = j * width + i;
-			int u_index = (j >> 2) * (width >> 2) + (i >> 2);
-			int v_index = (j >> 2) * (width >> 2) + (i >> 2);
+		if (j & 1) { // equivalent to (j % 2 == 0)
+			pu = u + (j >> 1) * (width >> 1);
+			pv = v + (j >> 1) * (width >> 1);
+		}
 
-			y[y_index] = yuyv[index << 2];
-			y[y_index + 1] = yuyv[index << 2 + 2];
-			u[u_index] = yuyv[index << 2 + 1];
-			v[v_index] = yuyv[index << 2 + 3];
+		int i;
+		for (i = 0; i < width; i += 2) {
+			*py++ = *pyuyv++;
+			*pu++ = *pyuyv++;
+			*py++ = *pyuyv++;
+			*pv++ = *pyuyv++;
 		}
 	}
 }

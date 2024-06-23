@@ -18,7 +18,7 @@
 #include "vencode.h"
 
 #define BUFFER_COUNT	4
-#define FILE_SIZE_LIMIT (4 * 1024 * 1024) // 4MB
+#define FILE_SIZE_LIMIT (1024 * 1024) // 4MB
 struct opt_args {
 	char *pixel_format;
 	char *display_mode;
@@ -215,6 +215,12 @@ int main(int argc, char *argv[])
 	FILE *file = NULL;
 	char filename[64];
 
+	file = fopen("1.h264", "wb");
+	if (!file) {
+		LOG_ERROR("Error opening output file");
+		return -1;
+	}
+
 	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
@@ -249,6 +255,7 @@ int main(int argc, char *argv[])
 				}
 
 				snprintf(filename, sizeof(filename), "h264_%d.h264", file_count++);
+				printf("open new file\n");
 				file = fopen(filename, "wb");
 				if (!file) {
 					LOG_ERROR("Error opening output file");
@@ -260,6 +267,7 @@ int main(int argc, char *argv[])
 			if (file) {
 				fwrite(nals[i].p_payload, 1, nals[i].i_payload, file);
 				file_size += nals[i].i_payload;
+				printf("file_size:%d\n ", file_size/1024);
 			}
 		}
 
