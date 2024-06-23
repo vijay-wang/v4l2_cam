@@ -18,7 +18,7 @@ ${target}: ${COMPILE_XH264} ${OBJ}
 	${CC} -c ${INCLUDE} $^ -o $@ $(LIBFLAGS)
 
 ${COMPILE_XH264}:
-	cd ${XH264_DIR} && ./configure --host=arm-linux --prefix=$$(pwd)/.. --enable-shared --disable-asm  --cross-prefix=arm-linux-gnueabihf-  --enable-shared && make -j${JOBS} && make install
+	cd ${XH264_DIR} && ./configure --host=arm-linux --prefix=$$(pwd)/.. --enable-shared --disable-asm  --cross-prefix=arm-linux-gnueabihf-  && make -j${JOBS} && make install
 
 clean:
 	rm ${target} ${OBJ}; git clean -df

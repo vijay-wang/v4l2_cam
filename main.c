@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
 	x264_t *encoder;
 	int csp = X264_CSP_I420;
 
-	x264_param_default_preset(&param, "medium", "zerolatency");
+	x264_param_default_preset(&param, "placebo", "zerolatency");
 	param.i_width = width;
 	param.i_height = height;
 	param.i_csp = csp;
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
 	param.i_fps_den = 1;
 	param.b_vfr_input = 0;
 
-	if (x264_param_apply_profile(&param, "high") < 0) {
+	if (x264_param_apply_profile(&param, "baseline") < 0) {
 		fprintf(stderr, "Failed to set profile\n");
 		return;
 	}
@@ -237,7 +237,8 @@ int main(int argc, char *argv[])
 		return;
 	}
 
-	main_run = 0;
+	main_run = 1;
+	int flag = 0;
 	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
@@ -257,12 +258,16 @@ int main(int argc, char *argv[])
 			//return 1;
 		}
 
-		yuyv2h264(csp, encoder, i420_frame, bufs[mbuffer.index].pbuf, h264, width, height);
+		if (!(flag % 10)) {
+			yuyv2h264(csp, encoder, i420_frame, bufs[mbuffer.index].pbuf, h264, width, height);
+		}
+
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			LOG_WARNING("Queue Buffer failed\n");
 			continue;
 			//break;
 		}
+		flag++;
 	}
 
 	x264_encoder_close(encoder);
