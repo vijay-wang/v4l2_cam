@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
 			//return 1;
 		}
 
-		yuyv2h264(encoder, i420_frame, bufs[mbuffer.index].pbuf, h264, width, height);
+		yuyv2h264(csp, encoder, i420_frame, bufs[mbuffer.index].pbuf, h264, width, height);
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			LOG_WARNING("Queue Buffer failed\n");
 			continue;

@@ -104,11 +104,10 @@ void yuyv_to_i420(const unsigned char *yuyv, unsigned char *i420, unsigned int w
 	}
 }
 
-void yuyv2h264(x264_t *encoder, unsigned char *i420_frame, unsigned char *yuyv, unsigned char *h264, unsigned int width, unsigned int height)
+void yuyv2h264(int csp, x264_t *encoder, unsigned char *i420_frame, unsigned char *yuyv, unsigned char *h264, unsigned int width, unsigned int height)
 {
 	x264_picture_t pic_in, pic_out;
 	int frame_size = width * height;
-	int csp = X264_CSP_I420;
 
 	x264_picture_alloc(&pic_in, csp, width, height);
 	pic_in.img.i_csp = csp;
