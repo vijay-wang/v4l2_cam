@@ -196,7 +196,8 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	main_run = 100;
+	unsigned char *h264 = (unsigned char *)malloc(width * height);  // H.264输出缓冲区
+	main_run = 0;
 	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
@@ -216,24 +217,10 @@ int main(int argc, char *argv[])
 			//return 1;
 		}
 
-		int ret;
-		char path[32] = { 0 };
-		sprintf(path, "./yuyv.%d", main_run);
-		int fd_yuv;
 
-		fd_yuv = open(path, O_CREAT | O_RDWR | O_TRUNC, 0644);
-		if (fd_yuv == -1) {
-			perror("open");
-			return 1;
-		}
+		// TODO: 填充yuyv数据
 
-		ret = write(fd_yuv, bufs[mbuffer.index].pbuf, width * height *2);
-		if (fd_yuv == -1) {
-			perror("write");
-			return 1;
-		}
-
-		close(fd_yuv);
+		yuyv2h264(bufs[mbuffer.index].pbuf, h264, width, height);
 
 		//if (!strcmp(args.pixel_format, "yuyv"))
 		//	yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
@@ -248,8 +235,9 @@ int main(int argc, char *argv[])
 			continue;
 			//break;
 		}
-		main_run--;
 	}
+
+	free(h264);
 
 	if (!strcmp(args.display_mode, "fb")) {
 		ret = fb_deinit(&fb_info);
