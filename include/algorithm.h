@@ -12,5 +12,5 @@ typedef unsigned short rgb565le;
 typedef unsigned char rgb888[3];
 void yuyv2rgb(unsigned char *yuyv, unsigned char *rgb, int width, int height);
 void rgb565le2rgb888(rgb565le *prgb565le, rgb888 *prgb888, unsigned int width, unsigned int height);
-void yuyv2h264(int csp, x264_t *encoder, unsigned char *i420_frame, unsigned char *yuyv, unsigned char *h264, unsigned int width, unsigned int height);
+void yuyv_to_yuv420p(unsigned char *yuyv, x264_picture_t *pic, unsigned int width, unsigned int height);
 #endif

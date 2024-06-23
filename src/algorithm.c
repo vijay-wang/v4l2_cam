@@ -77,58 +77,24 @@ void rgb565le2rgb888(rgb565le *prgb565le, rgb888 *prgb888, unsigned int width, u
 	}
 }
 
-// YUYV to I420 (YUV420P) conversion function
-void yuyv_to_i420(const unsigned char *yuyv, unsigned char *i420, unsigned int width, unsigned int height)
+void yuyv_to_yuv420p(unsigned char *yuyv, x264_picture_t *pic, unsigned int width, unsigned int height)
 {
-	unsigned int frame_size = width * height;
-	unsigned char *y = i420;
-	unsigned char *u = i420 + frame_size;
-	unsigned char *v = i420 + frame_size + frame_size / 4;
-	unsigned int j;
-	unsigned int i;
+	unsigned char *y = pic->img.plane[0];
+	unsigned char *u = pic->img.plane[1];
+	unsigned char *v = pic->img.plane[2];
+	int j, i;
 
 	for (j = 0; j < height; j++) {
 		for (i = 0; i < width; i += 2) {
-			unsigned int yuyv_index = (j * width + i) * 2;
-			unsigned int i420_index = j * width + i;
+			int index = j * width + i;
+			int y_index = j * width + i;
+			int u_index = (j >> 2) * (width >> 2) + (i >> 2);
+			int v_index = (j >> 2) * (width >> 2) + (i >> 2);
 
-			y[i420_index] = yuyv[yuyv_index];
-			y[i420_index + 1] = yuyv[yuyv_index + 2];
-
-			if (j % 2 == 0 && i % 2 == 0) {
-				unsigned int uv_index = (j / 2) * (width / 2) + (i / 2);
-				u[uv_index] = yuyv[yuyv_index + 1];
-				v[uv_index] = yuyv[yuyv_index + 3];
-			}
+			y[y_index] = yuyv[index << 2];
+			y[y_index + 1] = yuyv[index << 2 + 2];
+			u[u_index] = yuyv[index << 2 + 1];
+			v[v_index] = yuyv[index << 2 + 3];
 		}
 	}
-}
-
-void yuyv2h264(int csp, x264_t *encoder, unsigned char *i420_frame, unsigned char *yuyv, unsigned char *h264, unsigned int width, unsigned int height)
-{
-	x264_picture_t pic_in, pic_out;
-	int frame_size = width * height;
-
-	x264_picture_alloc(&pic_in, csp, width, height);
-	pic_in.img.i_csp = csp;
-	pic_in.img.i_plane = 3;
-	yuyv_to_i420(yuyv, i420_frame, width, height);
-	memcpy(pic_in.img.plane[0], i420_frame, frame_size);          // Y
-	memcpy(pic_in.img.plane[1], i420_frame + frame_size, frame_size / 4);  // U
-	memcpy(pic_in.img.plane[2], i420_frame + frame_size + frame_size / 4, frame_size / 4);  // V
-
-	// Encode frame
-	x264_nal_t *nals;
-	int i_nals;
-	int frame_size_out = x264_encoder_encode(encoder, &nals, &i_nals, &pic_in, &pic_out);
-	if (frame_size_out < 0) {
-		fprintf(stderr, "Failed to encode frame\n");
-		return;
-	}
-
-	// Copy encoded frame to output buffer
-	memcpy(h264, nals[0].p_payload, frame_size_out);
-
-	// Clean up
-	x264_picture_clean(&pic_in);
 }

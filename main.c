@@ -15,6 +15,7 @@
 #include "algorithm.h"
 #include "fb_screen.h"
 #include "x264.h"
+#include "vencode.h"
 
 #define BUFFER_COUNT	4
 
@@ -210,32 +211,13 @@ int main(int argc, char *argv[])
 	}
 
 	// Initialize x264 encoder
+	x264_picture_t pic_in, pic_out;
 	x264_param_t param;
 	x264_t *encoder;
-	int csp = X264_CSP_I420;
+	x264_nal_t *nals;
+	int num_nals;
 
-	x264_param_default_preset(&param, "placebo", "zerolatency");
-	param.i_width = width;
-	param.i_height = height;
-	param.i_csp = csp;
-	param.rc.i_rc_method = X264_RC_CRF;
-	param.rc.f_rf_constant = 25;
-	param.rc.f_rf_constant_max = 35;
-	param.i_fps_num = 30;
-	param.i_fps_den = 1;
-	param.b_vfr_input = 0;
-
-	if (x264_param_apply_profile(&param, "baseline") < 0) {
-		fprintf(stderr, "Failed to set profile\n");
-		return;
-	}
-
-	//open encoder
-	encoder = x264_encoder_open(&param);
-	if (!encoder) {
-		fprintf(stderr, "Failed to open encoder\n");
-		return;
-	}
+	encoder = init_x264_encoder(&param, &pic_in, width, height);
 
 	main_run = 1;
 	int flag = 0;
@@ -260,8 +242,14 @@ int main(int argc, char *argv[])
 		}
 
 		if (!(flag % 10)) {
+		yuyv_to_yuv420p(bufs[mbuffer.index].pbuf, &pic_in, width, height);
+		if (x264_encoder_encode(encoder, &nals, &num_nals, &pic_in, &pic_out) < 0) {
+			LOG_ERROR("Error encoding frame\n");
+			break;
+		}
 
-			yuyv2h264(csp, encoder, i420_frame, bufs[mbuffer.index].pbuf, h264, width, height);
+
+
 			int file;
 			char filename[32];
 			sprintf(filename, "h2264.%d", save_file);
