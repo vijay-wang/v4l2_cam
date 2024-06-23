@@ -239,6 +239,7 @@ int main(int argc, char *argv[])
 
 	main_run = 1;
 	int flag = 0;
+	int save_file = 0;
 	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
@@ -259,8 +260,25 @@ int main(int argc, char *argv[])
 		}
 
 		if (!(flag % 10)) {
+
 			yuyv2h264(csp, encoder, i420_frame, bufs[mbuffer.index].pbuf, h264, width, height);
+			int file;
+			char filename[32];
+			sprintf(filename, "h2264.%d", save_file);
+			file = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0644);
+			if (fd == -1) {
+				perror("open");
+				return 1;
+			}
+
+			write(file, h264, width * height);
+
+
+			// 关闭文件
+			close(file);
+			save_file++;
 		}
+
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			LOG_WARNING("Queue Buffer failed\n");
