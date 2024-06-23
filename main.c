@@ -196,7 +196,7 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	main_run = 1;
+	main_run = 100;
 	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
@@ -216,19 +216,39 @@ int main(int argc, char *argv[])
 			//return 1;
 		}
 
-		if (!strcmp(args.pixel_format, "yuyv"))
-			yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
-		if (!strcmp(args.pixel_format, "rgb565le"))
-			rgb565le2rgb888(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
+		int ret;
+		char path[32] = { 0 };
+		sprintf(path, "./yuyv.%d", main_run);
+		int fd_yuv;
 
-		if (!strcmp(args.display_mode, "fb"))
-			fb_display_rgb_frame(&fb_info, rgb_frame);
+		fd_yuv = open(path, O_CREAT | O_RDWR | O_TRUNC, 0644);
+		if (fd_yuv == -1) {
+			perror("open");
+			return 1;
+		}
+
+		ret = write(fd_yuv, bufs[mbuffer.index].pbuf, width * height *2);
+		if (fd_yuv == -1) {
+			perror("write");
+			return 1;
+		}
+
+		close(fd_yuv);
+
+		//if (!strcmp(args.pixel_format, "yuyv"))
+		//	yuyv2rgb(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
+		//if (!strcmp(args.pixel_format, "rgb565le"))
+		//	rgb565le2rgb888(bufs[mbuffer.index].pbuf, rgb_frame, width, height);
+
+		//if (!strcmp(args.display_mode, "fb"))
+		//	fb_display_rgb_frame(&fb_info, rgb_frame);
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			LOG_WARNING("Queue Buffer failed\n");
 			continue;
 			//break;
 		}
+		main_run--;
 	}
 
 	if (!strcmp(args.display_mode, "fb")) {
