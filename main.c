@@ -199,17 +199,6 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	unsigned char *h264 = (unsigned char *)malloc(width * height);  // H.264输出缓冲区
-	if (!h264) {
-		LOG_ERROR("Failed to allocate h264 frame\n");
-		return -1;
-	}
-	unsigned char *i420_frame = (unsigned char *)malloc(width * height * 3 / 2);
-	if (!i420_frame) {
-		LOG_ERROR("Failed to allocate I420 frame\n");
-		return -1;
-	}
-
 	// Initialize x264 encoder
 	x264_picture_t pic_in, pic_out;
 	x264_param_t param;
@@ -259,7 +248,7 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 
-			write(file, h264, width * height);
+			//write(file, h264, width * height);
 
 
 			// 关闭文件
@@ -276,9 +265,8 @@ int main(int argc, char *argv[])
 		flag++;
 	}
 
+	x264_picture_clean(&pic_in);
 	x264_encoder_close(encoder);
-	free(i420_frame);
-	free(h264);
 
 	if (!strcmp(args.display_mode, "fb")) {
 		ret = fb_deinit(&fb_info);
