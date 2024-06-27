@@ -16,6 +16,7 @@
 #include "fb_screen.h"
 #include "x264.h"
 #include "vencode.h"
+#include "client.h"
 
 #define BUFFER_COUNT	4
 #define FILE_SIZE_LIMIT (1024 * 1024) // 4MB
@@ -302,6 +303,10 @@ int main(int argc, char *argv[])
 		if (ret < 0)
 			LOG_ERROR("camera_munmap_buffer failed\n");
 	}
+
+	//调用客户端接口发送数据
+	send_v4l2_data("127.0.0.1",8080);
+
 	camera_close(fd);
 	return 0;
 }
