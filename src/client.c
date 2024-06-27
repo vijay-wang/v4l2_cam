@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include "video.h"
+#include "level_log.h"
 #include "client.h"
 
 int client_init(char *server_ip, unsigned short server_port, char *buffer, unsigned int pixel_format, unsigned short width, unsigned short height)
@@ -14,7 +15,7 @@ int client_init(char *server_ip, unsigned short server_port, char *buffer, unsig
 	// 创建套接字
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == -1) {
-		perror("socket");
+		LOG_ERROR("socket failed\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -27,9 +28,10 @@ int client_init(char *server_ip, unsigned short server_port, char *buffer, unsig
 	// 连接服务器
 	while (1) {
 		if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1)
-			perror("connect");
+			LOG_ERROR("connect failed\n");
 		else
 			break;
+		sleep(2);
 		
 	}
 	//unsigned short *p = (unsigned short *)buffer;
