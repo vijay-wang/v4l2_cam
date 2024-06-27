@@ -9,13 +9,14 @@ COMPILE_XH264=xh264
 XH264_DIR=x264-snapshot-20160620-2245-stable
 JOBS=32
 LIBS=  -lpthread -L./lib -lx264
+MYCFLAGS=-std=gnu99
 
 
 ${target}: ${COMPILE_XH264} ${OBJ}
-	${CC} ${OBJ} ${LIBS} ${INCLUDE} -o $@ $(LIBFLAGS)
+	${CC} ${OBJ} ${LIBS} ${INCLUDE} -o $@ $(LIBFLAGS) $(MYCFLAGS)
 
 %.o: %.c
-	${CC} -c ${INCLUDE} $^ -o $@ $(LIBFLAGS)
+	${CC} -c ${INCLUDE} $^ -o $@ $(LIBFLAGS) $(MYCFLAGS)
 
 ${COMPILE_XH264}:
 	cd ${XH264_DIR} && ./configure --host=arm-linux --prefix=$$(pwd)/.. --enable-shared --disable-asm  --cross-prefix=arm-linux-gnueabihf-  && make -j${JOBS} && make install

@@ -6,36 +6,42 @@
 #include "video.h"
 #include "client.h"
 
-#define HEADER_SIZE 12
-
-int client_init(void)
+int client_init(char *server_ip, unsigned short server_port, char *buffer, unsigned int pixel_format, unsigned short width, unsigned short height)
 {
-    int sock;
-    struct sockaddr_in server_addr;
-    char header[HEADER_SIZE];
-    char *data;
-    int format, width, height;
-    size_t data_size;
+	int sock;
+	struct sockaddr_in server_addr;
 
-    // 创建套接字
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock == -1) {
-        perror("socket");
-        exit(EXIT_FAILURE);
-    }
+	// 创建套接字
+	sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (sock == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
 
-    // 设置服务器地址结构体
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(server_port);
-    server_addr.sin_addr.s_addr = inet_addr(server_ip);
+	// 设置服务器地址结构体
+	memset(&server_addr, 0 ,sizeof(struct sockaddr_in));
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(server_port);
+	inet_aton(server_ip, &server_addr.sin_addr);	
 
-    // 连接服务器
-    if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-        perror("connect");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
-
+	// 连接服务器
+	while (1) {
+		if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1)
+			perror("connect");
+		else
+			break;
+		
+	}
+	//unsigned short *p = (unsigned short *)buffer;
+	//*(p) = 0xaa55;
+	//*(p + 1) = pixel_format;
+	//*(p + 3) = width;
+	//*(p + 4) = height;
+	*(unsigned short *)buffer =  0xaa55;
+	*(unsigned int *)(buffer + 2) = pixel_format;
+	*(unsigned short *)(buffer + 6) = width;
+	*(unsigned short *)(buffer + 8)= height;
+	return sock;
 }
 
 void client_deinit(int sockfd)
@@ -43,39 +49,8 @@ void client_deinit(int sockfd)
 	close(sockfd);
 }
 
-void send_v4l2_data(const char *server_ip, int server_port) {
-    // 获取v4l2数据
-    data = (char*)get_v4l2_data(&data_size);
-    format = get_v4l2_format();
-    width = get_v4l2_width();
-    height = get_v4l2_height();
-
-    // 打包头部
-    header[0] = 0xAA;
-    header[1] = 0x55;
-    memcpy(header + 2, &format, 4);
-    memcpy(header + 6, &width, 2);
-    memcpy(header + 8, &height, 2);
-    header[10] = 0x55;
-    header[11] = 0xAA;
-
-    // 发送头部
-    if (send(sock, header, HEADER_SIZE, 0) == -1) {
-        perror("send header");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
-
-    // 发送数据
-    if (send(sock, data, data_size, 0) == -1) {
-        perror("send data");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Data sent successfully\n");
-
-    // 关闭套接字
-    close(sock);
+int send_yuv420p_data(int sockfd, void *buffer, unsigned int size)
+{
+	return write(sockfd, buffer, size);
 }
 

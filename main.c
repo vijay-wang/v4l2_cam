@@ -24,6 +24,12 @@ struct opt_args {
 	char *display_mode;
 	char *width;
 	char *height;
+	char *server_ip;
+	char *server_port;
+};
+
+enum pixel_format {
+	PIXEL_FORMAT_YUV420P,
 };
 
 void usage(void)
@@ -34,6 +40,8 @@ void usage(void)
 		"	-H set pixel height\n"
 		"	-l list the resolutions supported by the camera\n"
 		"	-q query the basic infomation about the driver and camera\n"
+		"	-a server ip\n"
+		"	-p server port\n"
 		"	-h help\n");
 }
 
@@ -46,7 +54,7 @@ void parse_args(int fd, struct opt_args *args, int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	while ((ch = getopt(argc, argv, "f:W:H:lqh")) != -1)  {
+	while ((ch = getopt(argc, argv, "a:p:f:W:H:lqh")) != -1)  {
 		switch (ch) {
 		case 'f':
 			args->pixel_format = optarg;
@@ -56,6 +64,12 @@ void parse_args(int fd, struct opt_args *args, int argc, char **argv)
 			break;
 		case 'H':
 			args->height = optarg;
+			break;
+		case 'a':
+			args->server_ip = optarg;
+			break;
+		case 'p':
+			args->server_port = optarg;
 			break;
 		case 'q':
 			camera_query_capability(fd);
@@ -121,6 +135,7 @@ int main(int argc, char *argv[])
 	parse_args(fd, &args, argc, argv);
 	width = atoi(args.width);
 	height = atoi(args.height);
+	unsigned short server_port = atoi(args.server_port);
 
 	/* set format */
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -178,8 +193,14 @@ int main(int argc, char *argv[])
 	 else
 		LOG_DEBUG("camera_streamon success\n");
 
+	
+	unsigned int sz_yuv420p_buffer = SZ_HEADER + SZ_PIXEL_FORMAT + SZ_WIDTH + SZ_HEIGHT + width * height * 3 / 2;
+	char *frame_420p = malloc(sz_yuv420p_buffer);
+	int sockfd = client_init(args.server_ip, server_port, frame_420p, PIXEL_FORMAT_YUV420P, width, height);
+
 	main_run = 1;
 	while (main_run) {
+		int ret;
 		fd_set fds;
 		FD_ZERO(&fds);
 		FD_SET(fd, &fds);
@@ -198,12 +219,15 @@ int main(int argc, char *argv[])
 			//return 1;
 		}
 
-		yuyv_to_yuv420p(bufs[mbuffer.index].pbuf, &pic_in, width, height);
+		yuyv_to_yuv420p(bufs[mbuffer.index].pbuf, frame_420p + SZ_HEADER + SZ_PIXEL_FORMAT + SZ_WIDTH + SZ_HEIGHT, width, height);
 
 		//send yuv420p data to server
-
-
-
+		ret = send_yuv420p_data(sockfd, frame_420p, width * height * 3 / 2);
+		if (ret < 0) {
+			LOG_ERROR("send_yuv420p_data failed\n");
+			break;
+			
+		}
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
 			LOG_WARNING("Queue Buffer failed\n");
@@ -212,6 +236,7 @@ int main(int argc, char *argv[])
 		}
 	}
 		
+	free(frame_420p);
 	/* stream off */
 	ret = camera_streamoff(fd, &type);
 	if (ret < 0)
@@ -225,9 +250,6 @@ int main(int argc, char *argv[])
 		if (ret < 0)
 			LOG_ERROR("camera_munmap_buffer failed\n");
 	}
-
-	//调用客户端接口发送数据
-	send_v4l2_data("127.0.0.1",8080);
 
 	camera_close(fd);
 	return 0;
