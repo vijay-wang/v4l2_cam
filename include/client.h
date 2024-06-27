@@ -5,6 +5,8 @@
 
 // 客户端函数声明
 void send_v4l2_data(const char *server_ip, int server_port);
+void client_deinit(int sockfd);
+int client_init(void);
 
 #endif // CLIENT_H
 

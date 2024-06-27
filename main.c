@@ -13,7 +13,6 @@
 #include "video.h"
 #include "level_log.h"
 #include "algorithm.h"
-#include "fb_screen.h"
 #include "x264.h"
 #include "vencode.h"
 #include "client.h"
@@ -33,7 +32,6 @@ void usage(void)
 		"	-f pixel format, yuyv, rgb565le\n"
 		"	-W set pixel width\n"
 		"	-H set pixel height\n"
-		"	-d set display way\n"
 		"	-l list the resolutions supported by the camera\n"
 		"	-q query the basic infomation about the driver and camera\n"
 		"	-h help\n");
@@ -48,11 +46,8 @@ void parse_args(int fd, struct opt_args *args, int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	while ((ch = getopt(argc, argv, "d:f:W:H:lqh")) != -1)  {
+	while ((ch = getopt(argc, argv, "f:W:H:lqh")) != -1)  {
 		switch (ch) {
-		case 'd':
-			args->display_mode = optarg;
-			break;
 		case 'f':
 			args->pixel_format = optarg;
 			break;
@@ -103,14 +98,12 @@ int main(int argc, char *argv[])
 	struct v4l2_format fmt;
 	struct v4l2_requestbuffers reqbuffer;
 	struct v4l2_buffer mbuffer;
-	struct fb_info fb_info;
 	struct opt_args args;
 
 	memset(bufs, 0, sizeof(bufs));
 	memset(&fmt, 0, sizeof(struct v4l2_format));
 	memset(&reqbuffer, 0, sizeof(struct v4l2_requestbuffers));
 	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
-	memset(&fb_info, 0, sizeof(struct fb_info));
 	memset(&args, 0, sizeof(struct opt_args));
 
 	signal(SIGINT, sighandler);
@@ -185,43 +178,7 @@ int main(int argc, char *argv[])
 	 else
 		LOG_DEBUG("camera_streamon success\n");
 
-	rgb_frame = (unsigned char *)camera_alloc_rgb(width, height);
-
-	if (!args.display_mode) {
-		LOG_ERROR("Display mode not been set\n");
-		exit(EXIT_FAILURE);
-	} else if (!strcmp(args.display_mode, "fb")) {
-		fb_set_info(&fb_info, width, height, FB_PATH);
-		ret = fb_init(&fb_info);
-		if (ret < 0)
-			LOG_ERROR("fb_init failed\n");
-	} else {
-		LOG_ERROR("Unkown display_mode\n");
-		exit(EXIT_FAILURE);
-	}
-
-	// Initialize x264 encoder
-	x264_picture_t pic_in, pic_out;
-	x264_param_t param;
-	x264_t *encoder;
-	x264_nal_t *nals;
-	int num_nals;
-
-	encoder = init_x264_encoder(&param, &pic_in, width, height);
-
 	main_run = 1;
-
-	int file_count = 0;
-	int file_size = 0;
-	FILE *file = NULL;
-	char filename[64];
-
-	file = fopen("1.h264", "wb");
-	if (!file) {
-		LOG_ERROR("Error opening output file");
-		return -1;
-	}
-
 	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
@@ -242,35 +199,10 @@ int main(int argc, char *argv[])
 		}
 
 		yuyv_to_yuv420p(bufs[mbuffer.index].pbuf, &pic_in, width, height);
-		if (x264_encoder_encode(encoder, &nals, &num_nals, &pic_in, &pic_out) < 0) {
-			LOG_ERROR("Error encoding frame\n");
-			break;
-		}
+
+		//send yuv420p data to server
 
 
-		int i;
-		for (i = 0; i < num_nals; ++i) {
-			if (file_size + nals[i].i_payload > FILE_SIZE_LIMIT) {
-				if (file) {
-					fclose(file);
-				}
-
-				snprintf(filename, sizeof(filename), "h264_%d.h264", file_count++);
-				printf("open new file\n");
-				file = fopen(filename, "wb");
-				if (!file) {
-					LOG_ERROR("Error opening output file");
-					return -1;
-				}
-				file_size = 0;
-			}
-
-			if (file) {
-				fwrite(nals[i].p_payload, 1, nals[i].i_payload, file);
-				file_size += nals[i].i_payload;
-				printf("file_size:%d\n ", file_size/1024);
-			}
-		}
 
 
 		if (camera_qbuffer(fd, &mbuffer) == -1) {
@@ -279,16 +211,6 @@ int main(int argc, char *argv[])
 			//break;
 		}
 	}
-
-	x264_picture_clean(&pic_in);
-	x264_encoder_close(encoder);
-
-	if (!strcmp(args.display_mode, "fb")) {
-		ret = fb_deinit(&fb_info);
-		if (ret < 0)
-			LOG_ERROR("fb_deinit failed\n");
-	}
-	camera_free_rgb(rgb_frame);
 		
 	/* stream off */
 	ret = camera_streamoff(fd, &type);

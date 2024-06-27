@@ -8,7 +8,8 @@
 
 #define HEADER_SIZE 12
 
-void send_v4l2_data(const char *server_ip, int server_port) {
+int client_init(void)
+{
     int sock;
     struct sockaddr_in server_addr;
     char header[HEADER_SIZE];
@@ -35,6 +36,14 @@ void send_v4l2_data(const char *server_ip, int server_port) {
         exit(EXIT_FAILURE);
     }
 
+}
+
+void client_deinit(int sockfd)
+{
+	close(sockfd);
+}
+
+void send_v4l2_data(const char *server_ip, int server_port) {
     // 获取v4l2数据
     data = (char*)get_v4l2_data(&data_size);
     format = get_v4l2_format();
