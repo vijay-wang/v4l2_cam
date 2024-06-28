@@ -1,6 +1,7 @@
 #ifndef _LEVEL_LOG_H
 #define _LEVEL_LOG_H
 #include <stdio.h>
+#include <generated/autoconf.h>
 
 // 定义日志级别
 #define LOG_LEVEL_NONE    0
@@ -9,8 +10,19 @@
 #define LOG_LEVEL_INFO    3
 #define LOG_LEVEL_DEBUG   4
 
-// 当前日志级别
+#if defined(CONFIG_LOG_LEVEL_NONE)
+#define CURRENT_LOG_LEVEL LOG_LEVEL_NONE
+#elif defined(CONFIG_LOG_LEVEL_ERROR)
+#define CURRENT_LOG_LEVEL LOG_LEVEL_ERROR
+#elif defined(CONFIG_LOG_LEVEL_WARNING)
+#define CURRENT_LOG_LEVEL LOG_LEVEL_WARNING
+#elif defined(CONFIG_LOG_LEVEL_INFO)
+#define CURRENT_LOG_LEVEL LOG_LEVEL_INFO
+#elif defined(CONFIG_LOG_LEVEL_DEBUG)
 #define CURRENT_LOG_LEVEL LOG_LEVEL_DEBUG
+#endif
+
+// 当前日志级别
 #ifndef CURRENT_LOG_LEVEL
 #define CURRENT_LOG_LEVEL LOG_LEVEL_DEBUG
 #endif

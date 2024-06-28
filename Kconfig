@@ -1,0 +1,44 @@
+mainmenu "v4l2 camera"
+
+#menu "Architecture select"
+
+choice
+	prompt "Architecture select"
+
+config ARCH_ARM
+	bool "ARM Archetecture"
+
+config ARCH_X64
+	bool "X64 Archetecture"
+
+endchoice
+
+# x264 library
+config X264
+	bool "h.264 package"
+	default y
+
+# Log level select
+choice
+	prompt "log level select"
+
+config LOG_LEVEL_NONE
+	bool "log level none"
+
+config LOG_LEVEL_ERROR
+	bool "log level error"
+
+config LOG_LEVEL_WARNING
+	bool "log level warning"
+
+config LOG_LEVEL_INFO
+	bool "log level info"
+
+config LOG_LEVEL_DEBUG
+	bool "log level debug"
+
+endchoice
+#endmenu
+
+
+

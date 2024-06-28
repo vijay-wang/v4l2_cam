@@ -1,0 +1,12 @@
+#
+# Automatically generated file; DO NOT EDIT.
+# v4l2 camera
+#
+CONFIG_ARCH_ARM=y
+# CONFIG_ARCH_X64 is not set
+CONFIG_X264=y
+# CONFIG_LOG_LEVEL_NONE is not set
+# CONFIG_LOG_LEVEL_ERROR is not set
+# CONFIG_LOG_LEVEL_WARNING is not set
+# CONFIG_LOG_LEVEL_INFO is not set
+CONFIG_LOG_LEVEL_DEBUG=y
