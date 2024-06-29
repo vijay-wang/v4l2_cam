@@ -16,110 +16,6 @@
 #include "fb_screen.h"
 #include "x264.h"
 #include "vencode.h"
-#include <liveMedia/liveMedia.hh>
-#include <BasicUsageEnvironment/BasicUsageEnvironment.hh>
-#include <groupsock/GroupsockHelper.hh>
-
-
-UsageEnvironment* env;
-uint8_t* pframe = NULL; // Pointer to the current frame buffer
-unsigned bufferSize = 0;   // Size of the current frame buffer
-
-class MemoryBufferSource : public FramedSource {
-	public:
-    static MemoryBufferSource* createNew(UsageEnvironment& env, uint8_t*& buffer, unsigned& bufferSize) {
-        return new MemoryBufferSource(env, buffer, bufferSize);
-    }
-
-	protected:
-    MemoryBufferSource(UsageEnvironment& env, uint8_t*& buffer, unsigned& bufferSize)
-        : FramedSource(env), fBuffer(buffer), fBufferSize(bufferSize) {}
-
-    virtual void doGetNextFrame() override {
-        if (fBuffer != NULL && fBufferSize > 0) {
-            memmove(fTo, fBuffer, fBufferSize);
-            fFrameSize = fBufferSize;
-            fDurationInMicroseconds = 33333; // Set frame duration (30 fps)
-            FramedSource::afterGetting(this);
-            return;
-        }
-
-        handleClosure(this);
-    }
-
-	private:
-    uint8_t*& fBuffer;
-    unsigned& fBufferSize;
-};
-
-class H264LiveStreamSubsession : public OnDemandServerMediaSubsession {
-	public:
-    static H264LiveStreamSubsession* createNew(UsageEnvironment& env, uint8_t*& buffer, unsigned& bufferSize) {
-        return new H264LiveStreamSubsession(env, buffer, bufferSize);
-    }
-
-	protected:
-    H264LiveStreamSubsession(UsageEnvironment& env, uint8_t*& buffer, unsigned& bufferSize)
-        : OnDemandServerMediaSubsession(env, True), fBuffer(buffer), fBufferSize(bufferSize) {}
-
-    virtual FramedSource* createNewStreamSource(unsigned clientSessionId, unsigned& estBitrate) override {
-        estBitrate = 500; // kbps
-        return H264VideoStreamFramer::createNew(envir(), MemoryBufferSource::createNew(envir(), fBuffer, fBufferSize));
-    }
-
-    virtual RTPSink* createNewRTPSink(Groupsock* rtpGroupsock, unsigned char rtpPayloadTypeIfDynamic, FramedSource* inputSource) override {
-        return H264VideoRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic);
-    }
-
-	private:
-    uint8_t*& fBuffer;
-    unsigned& fBufferSize;
-};
-
-void announceStream(RTSPServer* rtspServer, ServerMediaSession* sms, char const* streamName) {
-    char* url = rtspServer->rtspURL(sms);
-    *env << "Play this stream using the URL \""<< url << "\"\n";
-    delete[] url;
-}
-
-void afterEncoding(void*) {
-	    MemoryBufferSource* source = MemoryBufferSource::createNew(*env, pframe, bufferSize);
-	        FramedSource::afterGetting(source);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -199,6 +95,7 @@ void sighandler(int sig)
 {
 	main_run = 0;
 }
+
 
 int main(int argc, char *argv[])
 {
@@ -328,32 +225,6 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-
-	// Set up our usage environment:
-	TaskScheduler* scheduler = BasicTaskScheduler::createNew();
-	env = BasicUsageEnvironment::createNew(*scheduler);
-
-	// Create the RTSP server:
-	UserAuthenticationDatabase* authDB = NULL;
-	RTSPServer* rtspServer = RTSPServer::createNew(*env, 5353, authDB);
-	if (rtspServer == NULL) {
-		*env << "Failed to create RTSP server: "<< env->getResultMsg() << "\n";
-		exit(1);
-	}
-
-	// Create a 'ServerMediaSession'object:'
-	ServerMediaSession* sms = ServerMediaSession::createNew(*env, "live", "Memory Buffer Stream", "Session streamed from a memory buffer");
-	sms->addSubsession(H264LiveStreamSubsession::createNew(*env, pframe, bufferSize));
-	rtspServer->addServerMediaSession(sms);
-
-	// Announce the URL of this stream:
-	announceStream(rtspServer, sms, "live");
-
-
-
-
-
-
 	while (main_run) {
 		fd_set fds;
 		FD_ZERO(&fds);
@@ -379,15 +250,6 @@ int main(int argc, char *argv[])
 			break;
 		}
 
-		
-
-		// 将编码后的数据传递给 MemoryBufferSource 并推送到 RTSP
-		for (int i = 0; i < num_nals; ++i) {
-			pframe = nals[i].p_payload;
-			bufferSize = nals[i].i_payload;
-
-			env->taskScheduler().triggerEvent(env->taskScheduler().createEventTrigger(afterEncoding));
-		}
 
 
 		////printf("one frame\n");

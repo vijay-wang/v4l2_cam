@@ -11,7 +11,7 @@ x264_t* init_x264_encoder(x264_param_t *param, x264_picture_t *pic_in, unsigned 
 	param->rc.f_rf_constant = 23;  // 调整此值以控制质量，范围为0-51，越小质量越好
 	param->i_width = width;
 	param->i_height = height;
-	param->i_fps_num = 25;
+	param->i_fps_num = 30;
 	param->i_fps_den = 1;
 	param->i_csp = X264_CSP_I420;
 	param->i_bframe = 0;
