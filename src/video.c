@@ -120,7 +120,7 @@ int camera_query_buffer(int fd, struct v4l2_buffer *mbuffer)
 int camera_map_buffer(int fd, struct v4l2_buffer *mbuffer, struct mbuf *buf)
 {
 	buf->length = mbuffer->length;
-	buf->pbuf = mmap(NULL, mbuffer->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, mbuffer->m.offset );
+	buf->pbuf = (char *)mmap(NULL, mbuffer->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, mbuffer->m.offset );
 	if (buf->pbuf < 0)
 		return -1;
 	return 0;

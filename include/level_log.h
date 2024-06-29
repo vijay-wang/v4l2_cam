@@ -20,13 +20,13 @@
 	do {\
 		if (level <= CURRENT_LOG_LEVEL) {\
 			if (level == LOG_LEVEL_ERROR) \
-				printf("\033[31m[%s] "fmt"\033[0m", log_level_to_string(level), ##__VA_ARGS__); \
+				printf("\033[31m[%s] " fmt "\033[0m", log_level_to_string(level), ##__VA_ARGS__); \
 			else if (level == LOG_LEVEL_WARNING) \
-				printf("\033[33m[%s] "fmt"\033[0m", log_level_to_string(level), ##__VA_ARGS__); \
+				printf("\033[33m[%s] " fmt "\033[0m", log_level_to_string(level), ##__VA_ARGS__); \
 			else if (level == LOG_LEVEL_INFO) \
-				printf("\033[32m[%s] "fmt"\033[0m", log_level_to_string(level), ##__VA_ARGS__); \
+				printf("\033[32m[%s] " fmt "\033[0m", log_level_to_string(level), ##__VA_ARGS__); \
 			else \
-				printf("[%s] "fmt, log_level_to_string(level), ##__VA_ARGS__); \
+				printf("[%s] " fmt, log_level_to_string(level), ##__VA_ARGS__); \
 		} \
 	} while (0)
 

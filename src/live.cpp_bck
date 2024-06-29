@@ -1,0 +1,71 @@
+#include "live.h"
+
+void streamFromBuffer(BufferSource* bufferSource, u_int8_t* pFrame, unsigned frameSize)
+{
+	while (true) {
+		// Fill the buffer with new frame data
+		// 假设你有函数填充缓冲区，例如 fillBuffer(pFrame, frameSize);
+		// fillBuffer(pFrame, frameSize);
+
+		// Simulate frame data filling for demonstration
+		memset(pFrame, 0, frameSize);  // 这里仅是示例，实际应用中填充实际数据
+
+		// Update the BufferSource with new data
+		bufferSource->fBuffer = pFrame;
+		bufferSource->fBufferSize = frameSize;
+
+		// Push the frame to the stream
+		bufferSource->deliverFrame();
+
+		// 适当的睡眠时间，以模拟实际应用中的帧率控制
+		std::this_thread::sleep_for(std::chrono::milliseconds(33));  // 假设每秒30帧
+	}
+}
+
+void streamTaskInit(void)
+{
+	// Begin by setting up our usage environment:
+	TaskScheduler* scheduler = BasicTaskScheduler::createNew();
+	UsageEnvironment* env = BasicUsageEnvironment::createNew(*scheduler);
+
+	UserAuthenticationDatabase* authDB = NULL;
+#ifdef ACCESS_CONTROL
+	authDB = new UserAuthenticationDatabase;
+	authDB->addUserRecord("username1", "password1");
+#endif
+
+	RTSPServer* rtspServer;
+	portNumBits rtspServerPortNum = 554;
+	rtspServer = DynamicRTSPServer::createNew(*env, rtspServerPortNum, authDB);
+	if (rtspServer == NULL) {
+		rtspServerPortNum = 8554;
+		rtspServer = DynamicRTSPServer::createNew(*env, rtspServerPortNum, authDB);
+	}
+	if (rtspServer == NULL) {
+		*env << "Failed to create RTSP server: "<< env->getResultMsg() << "\n";
+		exit(1);
+	}
+
+	// Example buffer and size
+	u_int8_t buffer[100000];  // Adjust size as necessary
+	unsigned bufferSize = sizeof(buffer);
+
+	// Create the buffer source
+	BufferSource* bufferSource = BufferSource::createNew(*env, buffer, bufferSize);
+
+	// Create a server media session and add the buffer source
+	ServerMediaSession* sms = ServerMediaSession::createNew(*env, "testStream", NULL, "Test stream from buffer");
+	sms->addSubsession(PassiveServerMediaSubsession::createNew(*bufferSource));
+	rtspServer->addServerMediaSession(sms);
+
+	*env << "Play the stream using the URL: rtsp://"<< rtspServer->rtspURLPrefix() << "testStream\n";
+
+	// 启动一个线程来处理缓冲区读取和推流
+	std::thread streamingThread(streamFromBuffer, bufferSource, buffer, bufferSize);
+
+	// 进入事件循环，保持服务器运行
+	env->taskScheduler().doEventLoop();  // does not return
+
+	// 确保在程序退出时清理线程
+	streamingThread.join();
+}

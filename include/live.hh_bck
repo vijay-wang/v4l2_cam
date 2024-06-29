@@ -1,0 +1,32 @@
+#ifndef _LIVE_HH
+#define _LIVE_HH
+#include <BasicUsageEnvironment.hh>
+#include <thread>
+#include "DynamicRTSPServer.hh"
+#include "BufferSource.hh"
+#include "version.hh"
+#include "FramedSource.hh"
+
+class BufferSource : public FramedSource {
+	public:
+		static BufferSource* createNew(UsageEnvironment& env, u_int8_t* buffer, unsigned bufferSize);
+
+	protected:
+		BufferSource(UsageEnvironment& env, u_int8_t* buffer, unsigned bufferSize);
+		virtual ~BufferSource();
+
+	private:
+		virtual void doGetNextFrame();
+		static void deliverFrame0(void* clientData);
+		void deliverFrame();
+
+	public:
+		u_int8_t* fBuffer;
+		unsigned fBufferSize;
+		unsigned fFrameSize;
+};
+
+void streamFromBuffer(BufferSource* bufferSource, u_int8_t* pFrame, unsigned frameSize);
+void streamTaskInit(void);
+
+#endif

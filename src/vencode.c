@@ -19,14 +19,14 @@ x264_t* init_x264_encoder(x264_param_t *param, x264_picture_t *pic_in, unsigned 
 
 	if (x264_param_apply_profile(param, "baseline") < 0) {
 		LOG_ERROR("Failed to set profile\n");
-		return;
+		return NULL;
 	}
 
 	//open encoder
 	x264_t *encoder = x264_encoder_open(param);
 	if (!encoder) {
 		LOG_ERROR("Failed to open encoder\n");
-		return;
+		return NULL;
 	}
 	x264_picture_alloc(pic_in, param->i_csp, param->i_width, param->i_height);
 	return encoder;
