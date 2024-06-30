@@ -10,6 +10,8 @@
 #include <signal.h>
 #include <sys/mman.h>
 #include <stdint.h>
+#include <stdatomic.h>
+#include <semaphore.h> 
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
@@ -24,9 +26,64 @@
 #include "x264.h"
 #include "vencode.h"
 
+#define BUFFER_COUNT	6
+#define  QDEEPTH	BUFFER_COUNT
+
+struct frm_queue {
+	//struct v4l2_buffer *blks[QDEEPTH];
+	struct v4l2_buffer mbuffer[QDEEPTH];
+	struct mbuf bufs[QDEEPTH];
+	unsigned char front;
+	unsigned char rear;
+	_Atomic unsigned char count;	//the queue member nums
+	_Atomic unsigned char keep_num; //the queue member num keeped bey user
+	sem_t sem;
+};
+
+static struct frm_queue data_frames;
+static int qdeepth;
+
+static int enqueue(struct frm_queue *q)
+{
+	if (atomic_load(&q->count) < qdeepth) {
+		q->rear = (++q->rear) % qdeepth;
+		atomic_fetch_add(&q->count, 1);
+		sem_post(&q->sem);
+	} else {
+		LOG_ERROR("libunicam queue full\n");
+		return -1;
+	}
+	return 0;
+}
+
+static int dequeue(struct frm_queue *q)
+{
+	sem_wait(&q->sem);
+	if (atomic_load(&q->count) == 0) {
+		LOG_ERROR("libunicam queue empty\n");
+		return -1;
+	} else {
+		q->front = (++q->front) % qdeepth;
+		atomic_fetch_sub(&q->keep_num, 1);
+		atomic_fetch_sub(&q->count, 1);
+	}
+	return 0;
+}
+static int queue_init(struct frm_queue *q)
+{
+	q->front = 0;
+	q->rear  = 0;
+
+	if (qdeepth == 0)
+		qdeepth = QDEEPTH;
+
+	atomic_init(&q->count, 0);
+	atomic_init(&q->keep_num, 0);
+	sem_init(&q->sem, 0, 0);
+	return 0;
+}
 
 
-#define BUFFER_COUNT	4
 #define FILE_SIZE_LIMIT (1 * 1024 * 1024 * 1024) // 4MB
 struct opt_args {
 	char *pixel_format;
@@ -326,22 +383,74 @@ void *rtmp_stream_proces(void *arg)
 	return 0;
 }
 
+// Initialize x264 encoder
+x264_picture_t pic_in, pic_out;
+unsigned int width, height;
+x264_param_t param;
+x264_t *encoder;
+x264_nal_t *nals;
+int num_nals;
+int file = NULL;
+
+//camera file descriptor
+int fd;
+void *encode_process(void *arg)
+{
+	
+	int ret;
+	while(1) {
+
+		yuyv_to_yuv420p((unsigned char*)data_frames.bufs[data_frames.front].pbuf, &pic_in, width, height);
+		if (x264_encoder_encode(encoder, &nals, &num_nals, &pic_in, &pic_out) < 0) {
+			LOG_ERROR("Error encoding frame\n");
+			break;
+		}
+
+
+
+		int i;
+		for (i = 0; i < num_nals; ++i) {
+			ret = write(file, nals[i].p_payload, nals[i].i_payload);
+			//printf("write frame bytes: %d\n", ret);
+		}
+
+
+		if (camera_qbuffer(fd, &data_frames.mbuffer[data_frames.front]) == -1) {
+			LOG_WARNING("Queue Buffer failed\n");
+			continue;
+			//break;
+		}
+		dequeue(&data_frames);
+	}
+	return NULL;
+}
+
 int main(int argc, char *argv[])
 {
-	int fd, ret;
+
+
+
+	//int fd;
+	int ret;
 	unsigned char *rgb_frame;
-	unsigned int width, height;
-	struct mbuf bufs[BUFFER_COUNT];
+	memset(&data_frames, 0, sizeof(struct frm_queue));
+	//unsigned int width, height;
+	//struct mbuf bufs[BUFFER_COUNT];
 	struct v4l2_format fmt;
 	struct v4l2_requestbuffers reqbuffer;
-	struct v4l2_buffer mbuffer;
+	//struct v4l2_buffer mbuffer;
 	struct fb_info fb_info;
 	struct opt_args args;
 
-	memset(bufs, 0, sizeof(bufs));
+	//init queue
+	ret = queue_init(&data_frames);
+	if (ret)
+		return ret;
+
+	//memset(bufs, 0, sizeof(bufs));
 	memset(&fmt, 0, sizeof(struct v4l2_format));
 	memset(&reqbuffer, 0, sizeof(struct v4l2_requestbuffers));
-	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
+	//memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
 	memset(&fb_info, 0, sizeof(struct fb_info));
 	memset(&args, 0, sizeof(struct opt_args));
 
@@ -393,18 +502,18 @@ int main(int argc, char *argv[])
 		LOG_DEBUG("camera_request_buffers success\n");
 
 	/* query buffers, map buffers, enqueue buffers */
-	memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
+	//memset(&mbuffer, 0, sizeof(struct v4l2_buffer));
 	int i;
 	for (i = 0; i < BUFFER_COUNT; ++i) {
-		mbuffer.index = i;
-		mbuffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		ret = camera_query_buffer(fd, &mbuffer);
+		data_frames.mbuffer[i].index = i;
+		data_frames.mbuffer[i].type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		ret = camera_query_buffer(fd, &data_frames.mbuffer[i]);
 		if (ret < 0)
 			LOG_ERROR("camera_query_buffers failed\n");
-		ret = camera_map_buffer(fd, &mbuffer, &bufs[i]);
+		ret = camera_map_buffer(fd, &data_frames.mbuffer[i], &data_frames.bufs[i]);
 		if (ret < 0)
 			LOG_ERROR("camera_map_buffers failed\n");
-		ret = camera_qbuffer(fd, &mbuffer);
+		ret = camera_qbuffer(fd, &data_frames.mbuffer[i]);
 		if (ret < 0)
 			LOG_ERROR("camera_qbuffer failed\n");
 	}
@@ -433,11 +542,11 @@ int main(int argc, char *argv[])
 	}
 
 	// Initialize x264 encoder
-	x264_picture_t pic_in, pic_out;
-	x264_param_t param;
-	x264_t *encoder;
-	x264_nal_t *nals;
-	int num_nals;
+	//x264_picture_t pic_in, pic_out;
+	//x264_param_t param;
+	//x264_t *encoder;
+	//x264_nal_t *nals;
+	//int num_nals;
 
 	encoder = init_x264_encoder(&param, &pic_in, width, height);
 
@@ -445,15 +554,17 @@ int main(int argc, char *argv[])
 
 	int file_count = 0;
 	int file_size = 0;
-	int file = NULL;
+	//int file = NULL;
 	char filename[64];
 
 	ret = mkfifo(FIFO_NAME, 0777);
 	if (ret < 0)
 		LOG_ERROR("mkfifo failed\n");
 
-	pthread_t tid;
-	pthread_create(&tid, NULL, rtmp_stream_proces, NULL);
+	pthread_t rtmp_tid, encode_tid;
+	//pthread_t tid;
+	pthread_create(&rtmp_tid, NULL, rtmp_stream_proces, NULL);
+	pthread_create(&encode_tid, NULL, encode_process, NULL);
 
 
 	file = open(FIFO_NAME, O_WRONLY);
@@ -462,7 +573,35 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+    //struct v4l2_streamparm stream_params = {};
+    //stream_params.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+    //if (ioctl(fd, VIDIOC_G_PARM, &stream_params) == -1) {
+    //    perror("Getting frame rate");
+    //    return 1;
+    //}
+
+
+
+
+
+
+    //stream_params.parm.capture.timeperframe.numerator = 1;
+    //stream_params.parm.capture.timeperframe.denominator = 30;
+
+    //if (ioctl(fd, VIDIOC_S_PARM, &stream_params) == -1) {
+    //    perror("Setting frame rate");
+    //    return 1;
+    //}
+
+
+
+
+
 	while (main_run) {
+		struct timespec start, end;
+		clock_gettime(CLOCK_MONOTONIC, &start);
+
 		fd_set fds;
 		FD_ZERO(&fds);
 		FD_SET(fd, &fds);
@@ -475,32 +614,22 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
-		if (camera_dqbuffer(fd, &mbuffer) == -1) {
+		if (camera_dqbuffer(fd, &data_frames.mbuffer[data_frames.rear]) == -1) {
 			LOG_WARNING("Retrieving Frame failed\n");
 			continue;
 			//return 1;
 		}
+		enqueue(&data_frames);
 
-		yuyv_to_yuv420p((unsigned char*)bufs[mbuffer.index].pbuf, &pic_in, width, height);
-		if (x264_encoder_encode(encoder, &nals, &num_nals, &pic_in, &pic_out) < 0) {
-			LOG_ERROR("Error encoding frame\n");
-			break;
-		}
+		clock_gettime(CLOCK_MONOTONIC, &end);
 
-
-
-		int i;
-		for (i = 0; i < num_nals; ++i) {
-			ret = write(file, nals[i].p_payload, nals[i].i_payload);
-			//printf("write frame bytes: %d\n", ret);
-		}
+		// 计算运行时间
+		double time_taken = (end.tv_sec - start.tv_sec) + 
+			(end.tv_nsec - start.tv_nsec) / 1000000.0;
+		printf("runtime: %.9f ms\n", time_taken);
 
 
-		if (camera_qbuffer(fd, &mbuffer) == -1) {
-			LOG_WARNING("Queue Buffer failed\n");
-			continue;
-			//break;
-		}
+
 	}
 	close(file);
 
@@ -523,7 +652,7 @@ int main(int argc, char *argv[])
 
 	/* unmap buffers */
 	for (i = 0; i < BUFFER_COUNT; ++i) {
-		ret = camera_munmap_buffer(&bufs[i]);
+		ret = camera_munmap_buffer(&data_frames.bufs[i]);
 		if (ret < 0)
 			LOG_ERROR("camera_munmap_buffer failed\n");
 	}
