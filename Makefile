@@ -9,7 +9,7 @@ OBJ=$(patsubst %.c,%.o,$(SRC))
 COMPILE_XH264=xh264
 XH264_DIR=x264-snapshot-20160620-2245-stable
 JOBS=32
-LIBS=  -lpthread -L./lib -lx264
+LIBS=  -lpthread -L./lib -lx264 -lavformat -lavutil -lavcodec -lswresample
 #CPPFLAGS=-std=c++11
 
 
