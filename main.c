@@ -103,160 +103,227 @@ void sighandler(int sig)
 	main_run = 0;
 }
 
+static double r2d(AVRational r)
+{
+	    return r.num == 0 || r.den == 0 ? 0. : (double)r.num / (double)r.den;
+}
+
+
+
+
+
+int avError(int errNum) {
+	char buf[1024];
+	//获取错误信息
+	av_strerror(errNum, buf, sizeof(buf));
+	LOG_ERROR("failed: %s\n", buf);
+	return -1;
+}
+
+
+
 #define FIFO_NAME "/tmp/h264_fifo"
 #define OUTPUT_URL "rtmp://127.0.0.1:1935/live/mystream"
 void *rtmp_stream_proces(void *arg)
 {
-
-	AVOutputFormat* ofmt = NULL;
-	//输入对应一个AVFormatContext，输出对应一个AVFormatContext
-	//（Input AVFormatContext and Output AVFormatContext）
-	AVFormatContext* ifmt_ctx = NULL, * ofmt_ctx = NULL;
-	AVPacket pkt;
-	const char *in_filename = FIFO_NAME;
-	const char *out_filename = OUTPUT_URL;
-	int ret, i;
 	int videoindex = -1;
-	int frame_index = 0;
-	int64_t start_time = 0;
-
-	//注册FFmpeg所有编解码器
+	//所有代码执行之前要调用av_register_all和avformat_network_init
+	//    //初始化所有的封装和解封装 flv mp4 mp3 mov。不包含编码和解码
 	av_register_all();
-	//Network
+
+	//初始化网络库
 	avformat_network_init();
-	//输入（Input）
-	if ((ret = avformat_open_input(&ifmt_ctx, in_filename, 0, 0)) < 0) {
-		printf("Could not open input file.");
-		goto end;
+
+	//使用的相对路径，执行文件在bin目录下。test.mp4放到bin目录下即可
+	const char *inUrl = "/tmp/h264_fifo";
+	//输出的地址
+	const char *outUrl = "rtmp://127.0.0.1:1935/live/mystream";
+
+	//////////////////////////////////////////////////////////////////
+	//                   输入流处理部分
+	/////////////////////////////////////////////////////////////////
+	//打开文件，解封装 avformat_open_input
+	//AVFormatContext **ps  输入封装的上下文。包含所有的格式内容和所有的IO。如果是文件就是文件IO，网络就对应网络IO
+	//const char *url  路径
+	//AVInputFormt * fmt 封装器
+	//AVDictionary ** options 参数设置
+	AVFormatContext *ictx = NULL;
+
+	AVOutputFormat *ofmt = NULL;
+
+	//打开文件，解封文件头
+	int ret = avformat_open_input(&ictx, inUrl, 0, NULL);
+	if (ret < 0) {
+		LOG_INFO("avformat_open_input failed!\n");
+		return NULL;
 	}
-	if ((ret = avformat_find_stream_info(ifmt_ctx, 0)) < 0) {
-		printf("Failed to retrieve input stream information");
-		goto end;
+	LOG_INFO("avformat_open_input success!\n");
+	//获取音频视频的信息 .h264 flv 没有头信息
+	ret = avformat_find_stream_info(ictx, 0);
+	if (ret != 0) {
+		LOG_INFO(" avformat_find_stream_info failed!\n");
+		return NULL;
+	}
+	//打印视频视频信息
+	//0打印所有  inUrl 打印时候显示，
+	av_dump_format(ictx, 0, inUrl, 0);
+
+	//////////////////////////////////////////////////////////////////
+	//                   输出流处理部分
+	/////////////////////////////////////////////////////////////////
+	AVFormatContext * octx = NULL;
+	//如果是输入文件 flv可以不传，可以从文件中判断。如果是流则必须传
+	//创建输出上下文
+	ret = avformat_alloc_output_context2(&octx, NULL, "flv", outUrl);
+	if (ret < 0) {
+		LOG_INFO(" avformat_alloc_output_context2 failed!\n");
+		return NULL;
+	}
+	LOG_INFO("avformat_alloc_output_context2 success!\n");
+
+	ofmt = octx->oformat;
+	LOG_INFO("nb_streams\n");
+	int i;
+
+	for (i = 0; i < ictx->nb_streams; i++) {
+
+		//获取输入视频流
+		AVStream *in_stream = ictx->streams[i];
+		//为输出上下文添加音视频流（初始化一个音视频流容器）
+		AVStream *out_stream = avformat_new_stream(octx, in_stream->codec->codec);
+		if (!out_stream) {
+			printf("未能成功添加音视频流\n");
+			ret = AVERROR_UNKNOWN;
+		}
+
+		//将输入编解码器上下文信息 copy 给输出编解码器上下文
+		//ret = avcodec_copy_context(out_stream->codec, in_stream->codec);
+		ret = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
+		//ret = avcodec_parameters_from_context(out_stream->codecpar, in_stream->codec);
+		//ret = avcodec_parameters_to_context(out_stream->codec, in_stream->codecpar);
+		if (ret < 0) {
+			printf("copy 编解码器上下文失败\n");
+		}
+		out_stream->codecpar->codec_tag = 0;
+
+		out_stream->codec->codec_tag = 0;
+		if (octx->oformat->flags & AVFMT_GLOBALHEADER) {
+			out_stream->codec->flags = out_stream->codec->flags | CODEC_FLAG_GLOBAL_HEADER;
+		}
 	}
 
-	for (i = 0; i < ifmt_ctx->nb_streams; i++)
-		if (ifmt_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+	//输入流数据的数量循环
+	for (i = 0; i < ictx->nb_streams; i++) {
+		if (ictx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
 			videoindex = i;
 			break;
 		}
-
-	av_dump_format(ifmt_ctx, 0, in_filename, 0);
-
-	//输出（Output）
-
-	avformat_alloc_output_context2(&ofmt_ctx, NULL, "flv", out_filename); //RTMP
-									      //avformat_alloc_output_context2(&ofmt_ctx, NULL, "mpegts", out_filename);//UDP
-
-	if (!ofmt_ctx) {
-		printf("Could not create output context\n");
-		ret = AVERROR_UNKNOWN;
-		goto end;
 	}
-	ofmt = ofmt_ctx->oformat;
-	for (i = 0; i < ifmt_ctx->nb_streams; i++) {
-		//根据输入流创建输出流（Create output AVStream according to input AVStream）
-		AVStream* in_stream = ifmt_ctx->streams[i];
-		AVStream* out_stream = avformat_new_stream(ofmt_ctx, in_stream->codec->codec);
-		if (!out_stream) {
-			printf("Failed allocating output stream\n");
-			ret = AVERROR_UNKNOWN;
-			goto end;
-		}
-		//复制AVCodecContext的设置（Copy the settings of AVCodecContext）
-		ret = avcodec_copy_context(out_stream->codec, in_stream->codec);
-		if (ret < 0) {
-			printf("Failed to copy context from input to output stream codec context\n");
-			goto end;
-		}
-		out_stream->codec->codec_tag = 0;
-		if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
-			out_stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-	}
-	//Dump Format
-	av_dump_format(ofmt_ctx, 0, out_filename, 1);
-	//打开输出URL（Open output URL）
-	if (!(ofmt->flags & AVFMT_NOFILE)) {
-		ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
-		if (ret < 0) {
-			printf("Could not open output URL '%s'", out_filename);
-			goto end;
-		}
-	}
-	//写文件头（Write file header）
-	ret = avformat_write_header(ofmt_ctx, NULL);
+
+	av_dump_format(octx, 0, outUrl, 1);
+
+	//////////////////////////////////////////////////////////////////
+	//                   准备推流
+	/////////////////////////////////////////////////////////////////
+
+	//打开IO
+	ret = avio_open(&octx->pb, outUrl, AVIO_FLAG_WRITE);
 	if (ret < 0) {
-		printf("Error occurred when opening output URL\n");
-		goto end;
+		avError(ret);
 	}
 
-	start_time = av_gettime();
+	//写入头部信息
+	ret = avformat_write_header(octx, 0);
+	if (ret < 0) {
+		avError(ret);
+	}
+	LOG_INFO("avformat_write_header Success!\n");
+	//推流每一帧数据
+	//int64_t pts  [pts*(num/den)  第几秒显示]
+	//int64_t dts  解码时间 [P帧(相对于上一帧的变化) I帧(关键帧，完整的数据) B帧(上一帧和下一帧的变化)]  有了B帧压缩率更高。
+	//uint8_t *data    
+	//int size
+	//int stream_index
+	//int flag
+	AVPacket pkt;
+	//获取当前的时间戳  微妙
+	long long start_time = av_gettime();
+	long long frame_index = 0;
 	while (1) {
-		AVStream* in_stream, * out_stream;
-		//获取一个AVPacket（Get an AVPacket）
-		ret = av_read_frame(ifmt_ctx, &pkt);
-		if (ret < 0)
+		//输入输出视频流
+		AVStream *in_stream, *out_stream;
+		//获取解码前数据
+		ret = av_read_frame(ictx, &pkt);
+		if (ret < 0) {
 			break;
-		//FIX：No PTS (Example: Raw H.264)
-		//Simple Write PTS
-		if (pkt.pts == AV_NOPTS_VALUE) {
-			//Write PTS
-			AVRational time_base1 = ifmt_ctx->streams[videoindex]->time_base;
-			//Duration between 2 frames (us)
-			int64_t calc_duration = (double)AV_TIME_BASE / av_q2d(ifmt_ctx->streams[videoindex]->r_frame_rate);
-			//Parameters
-			pkt.pts = (double)(frame_index * calc_duration) / (double)(av_q2d(time_base1) * AV_TIME_BASE);
-			pkt.dts = pkt.pts;
-			pkt.duration = (double)calc_duration / (double)(av_q2d(time_base1) * AV_TIME_BASE);
 		}
-		////Important:Delay 延时
-		//if (pkt.stream_index == videoindex) {
-		//	AVRational time_base = ifmt_ctx->streams[videoindex]->time_base;
-		//	AVRational time_base_q = {1,AV_TIME_BASE };
-		//	int64_t pts_time = av_rescale_q(pkt.dts, time_base, time_base_q);
-		//	int64_t now_time = av_gettime() - start_time;
-		//	if (pts_time > now_time)
-		//		av_usleep(pts_time - now_time);
 
-		//}
+		/*
+		   PTS（Presentation Time Stamp）显示播放时间
+		   DTS（Decoding Time Stamp）解码时间
+		   */
+		//没有显示时间（比如未解码的 H.264 ）
+		if (pkt.pts == AV_NOPTS_VALUE) {
+			//AVRational time_base：时基。通过该值可以把PTS，DTS转化为真正的时间。
+			AVRational time_base1 = ictx->streams[videoindex]->time_base;
 
-		in_stream = ifmt_ctx->streams[pkt.stream_index];
-		out_stream = ofmt_ctx->streams[pkt.stream_index];
-		///*copy packet */
-		////转换PTS/DTS（Convert PTS/DTS）
-		////pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, out_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-		////pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, out_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-		pkt.duration = av_rescale_q(pkt.duration, in_stream->time_base, out_stream->time_base);
+			//计算两帧之间的时间
+			/*
+			   r_frame_rate 基流帧速率  （不是太懂）
+			   av_q2d 转化为double类型
+			   */
+			int64_t calc_duration = (double)AV_TIME_BASE / av_q2d(ictx->streams[videoindex]->r_frame_rate);
+
+			//配置参数
+			pkt.pts = (double)(frame_index*calc_duration) / (double)(av_q2d(time_base1)*AV_TIME_BASE);
+			pkt.dts = pkt.pts;
+			pkt.duration = (double)calc_duration / (double)(av_q2d(time_base1)*AV_TIME_BASE);
+		}
+
+		//延时
+		if (pkt.stream_index == videoindex) {
+			AVRational time_base = ictx->streams[videoindex]->time_base;
+			AVRational time_base_q = {1,AV_TIME_BASE };
+			//计算视频播放时间
+			int64_t pts_time = av_rescale_q(pkt.dts, time_base, time_base_q);
+			//计算实际视频的播放时间
+			int64_t now_time = av_gettime() - start_time;
+
+			AVRational avr = ictx->streams[videoindex]->time_base;
+			//LOG_INFO("avr.num: %d, avr.den: %d, pkt.dts: %d, pkt.pts: %d, pts_time: %d\n", avr.num, avr.den, pkt.dts, pkt.pts, pts_time);
+			if (pts_time > now_time) {
+				//睡眠一段时间（目的是让当前视频记录的播放时间与实际时间同步）
+				av_usleep((unsigned int)(pts_time - now_time));
+			}
+		}
+
+		in_stream = ictx->streams[pkt.stream_index];
+		out_stream = octx->streams[pkt.stream_index];
+
+		//计算延时后，重新指定时间戳
+		pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, out_stream->time_base,(enum AVRounding) (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+		pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, out_stream->time_base, (enum AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+		pkt.duration = (int)av_rescale_q(pkt.duration, in_stream->time_base, out_stream->time_base);
+		//字节流的位置，-1 表示不知道字节流位置
 		pkt.pos = -1;
-		////Print to Screen
-		//if (pkt.stream_index == videoindex) {
-		//	printf("Send %8d video frames to output URL\n", frame_index);
-		//	frame_index++;
-		//}
-		//ret = av_write_frame(ofmt_ctx, &pkt);
-		ret = av_interleaved_write_frame(ofmt_ctx, &pkt);
+
+		if (pkt.stream_index == videoindex) {
+			//printf("Send %8d video frames to output URL\n", frame_index);
+			frame_index++;
+		}
+
+		//向输出上下文发送（向地址推送）
+		ret = av_interleaved_write_frame(octx, &pkt);
 
 		if (ret < 0) {
-			printf("Error muxing packet\n");
+			printf("发送数据包出错\n");
 			break;
 		}
 
+		//释放
 		av_free_packet(&pkt);
-
 	}
-	//写文件尾（Write file trailer）
-	av_write_trailer(ofmt_ctx);
-end:
-	avformat_close_input(&ifmt_ctx);
-	/*close output */
-	if (ofmt_ctx && !(ofmt->flags & AVFMT_NOFILE))
-		avio_close(ofmt_ctx->pb);
-	avformat_free_context(ofmt_ctx);
-	if (ret < 0 && ret != AVERROR_EOF) {
-		printf("Error occurred.\n");
-		return NULL;
-	}
-	return NULL;
-
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -312,7 +379,7 @@ int main(int argc, char *argv[])
 	ret = camera_set_format(fd, &fmt);
 	if (ret < 0)
 		LOG_ERROR("camera_set_format failed\n");
-	 else
+	else
 		LOG_DEBUG("camera_set_format success\n");
 
 	/* request buffers */
@@ -322,7 +389,7 @@ int main(int argc, char *argv[])
 	ret = camera_request_buffers(fd, &reqbuffer);
 	if (ret < 0)
 		LOG_ERROR("camera_request_buffers failed\n");
-	 else
+	else
 		LOG_DEBUG("camera_request_buffers success\n");
 
 	/* query buffers, map buffers, enqueue buffers */
@@ -347,7 +414,7 @@ int main(int argc, char *argv[])
 	ret = camera_streamon(fd, &type);
 	if (ret < 0)
 		LOG_ERROR("camera_streamon failed\n");
-	 else
+	else
 		LOG_DEBUG("camera_streamon success\n");
 
 	rgb_frame = (unsigned char *)camera_alloc_rgb(width, height);
@@ -446,12 +513,12 @@ int main(int argc, char *argv[])
 			LOG_ERROR("fb_deinit failed\n");
 	}
 	camera_free_rgb(rgb_frame);
-		
+
 	/* stream off */
 	ret = camera_streamoff(fd, &type);
 	if (ret < 0)
 		LOG_ERROR("camera_streamoff failed\n");
-	 else
+	else
 		LOG_DEBUG("camera_streamoff success\n");
 
 	/* unmap buffers */
