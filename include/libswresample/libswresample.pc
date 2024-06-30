@@ -1,0 +1,14 @@
+prefix=/home/wang/repo/ffmpeg-3.4.5/tmp
+exec_prefix=${prefix}
+libdir=/home/wang/repo/ffmpeg-3.4.5/tmp/lib
+includedir=/home/wang/repo/ffmpeg-3.4.5/tmp/include
+
+Name: libswresample
+Description: FFmpeg audio resampling library
+Version: 2.9.100
+Requires: 
+Requires.private: libavutil >= 55.78.100
+Conflicts:
+Libs: -L${libdir}  -lswresample 
+Libs.private: -lm
+Cflags: -I${includedir}

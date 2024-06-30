@@ -1,0 +1,14 @@
+prefix=/home/wang/repo/ffmpeg-3.4.5/tmp
+exec_prefix=${prefix}
+libdir=/home/wang/repo/ffmpeg-3.4.5/tmp/lib
+includedir=/home/wang/repo/ffmpeg-3.4.5/tmp/include
+
+Name: libavutil
+Description: FFmpeg utility library
+Version: 55.78.100
+Requires: 
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lavutil 
+Libs.private: -lm
+Cflags: -I${includedir}

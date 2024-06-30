@@ -1,0 +1,14 @@
+prefix=/home/wang/repo/ffmpeg-3.4.5/tmp
+exec_prefix=${prefix}
+libdir=/home/wang/repo/ffmpeg-3.4.5/tmp/lib
+includedir=/home/wang/repo/ffmpeg-3.4.5/tmp/include
+
+Name: libpostproc
+Description: FFmpeg postprocessing library
+Version: 54.7.100
+Requires: 
+Requires.private: libavutil >= 55.78.100
+Conflicts:
+Libs: -L${libdir}  -lpostproc 
+Libs.private: 
+Cflags: -I${includedir}
